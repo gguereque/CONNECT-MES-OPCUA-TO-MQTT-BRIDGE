@@ -1,0 +1,8 @@
+node_modules/
+build/
+dist-server/
+vendor/
+installer/output/
+data/bridge.db
+certs/
+data/certs/

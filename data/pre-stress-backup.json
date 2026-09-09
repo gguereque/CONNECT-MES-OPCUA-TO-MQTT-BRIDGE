@@ -1,0 +1,87 @@
+{
+  "savedAt": "2026-08-01T21:17:12.845Z",
+  "config": {
+    "opcua": {
+      "defaultServerId": "opc-1",
+      "servers": [
+        {
+          "id": "opc-1",
+          "name": "OPC Server 1",
+          "endpoint": "opc.tcp://127.0.0.1:4840",
+          "securityMode": "None",
+          "securityPolicy": "None",
+          "username": "",
+          "password": "",
+          "enabled": true
+        },
+        {
+          "id": "opc-2",
+          "name": "OPC Server 2",
+          "endpoint": "",
+          "securityMode": "None",
+          "securityPolicy": "None",
+          "username": "",
+          "password": "",
+          "enabled": true
+        }
+      ]
+    },
+    "mqtt": {
+      "url": "mqtt://mosquitto:1883",
+      "username": "",
+      "password": "",
+      "clientId": "connectmes-opcua-bridge",
+      "qos": 1,
+      "retain": false
+    },
+    "topics": {
+      "oee": "optimotion/oee",
+      "estop": "optimotion/estop"
+    },
+    "app": {
+      "pollIntervalMs": 1000,
+      "webPort": 3400
+    },
+    "connectmes": {
+      "baseUrl": "http://backend:3000",
+      "stationsPath": "/api/stations/assignment/stations",
+      "token": ""
+    }
+  },
+  "mappings": [
+    {
+      "id": 1,
+      "stationId": 125,
+      "context": {
+        "facilities": "",
+        "Area": "",
+        "Line": ""
+      },
+      "defaults": {
+        "Resolution": 1
+      },
+      "publish": {
+        "oee": true,
+        "estop": false,
+        "oeeOnlyOnChange": false,
+        "estopOnlyOnChange": true
+      },
+      "topics": {
+        "oee": "",
+        "estop": ""
+      },
+      "triggers": {
+        "oee": {
+          "mode": "always",
+          "triggerNodeId": ""
+        },
+        "estop": {
+          "mode": "onValueChanged",
+          "triggerNodeId": ""
+        }
+      },
+      "opcServerId": "",
+      "nodes": {}
+    }
+  ]
+}

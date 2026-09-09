@@ -1,0 +1,12 @@
+Instalación completada.
+
+ConnectMES OPC UA MQTT Bridge ya está instalado.
+
+Puede acceder a la interfaz web del bridge desde el puerto configurado durante la instalación.
+
+Recomendaciones:
+- Verifique que el broker MQTT y el servidor OPC UA estén disponibles.
+- Revise el archivo .env generado en la carpeta de instalación.
+- Si requiere cambios de configuración, ajuste el puerto o la conexión desde la interfaz web del bridge.
+
+Gracias por instalar ConnectMES OPC UA MQTT Bridge.

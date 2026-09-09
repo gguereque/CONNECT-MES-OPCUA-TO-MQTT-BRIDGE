@@ -1,0 +1,8 @@
+ConnectMES OPC UA MQTT Bridge
+
+Copyright (c) 2026 Optimotion
+
+This software is licensed for internal use and deployment by the purchaser.
+The installation of this software implies acceptance of the terms defined in the project documentation.
+
+For support, contact your ConnectMES administrator.

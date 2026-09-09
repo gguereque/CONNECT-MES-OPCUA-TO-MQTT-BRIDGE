@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CONNECT-MES OPC UA Bridge Admin</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <section id="login-shell" class="login-shell">
+    <div class="login-card">
+      <div class="login-card-tools">
+        <button id="btn-lang-toggle-login" class="topbar-mini-btn" type="button">ES</button>
+        <button id="btn-theme-toggle-login" class="topbar-mini-btn" type="button">☀</button>
+      </div>
+      <div class="brand-mark">CM</div>
+      <h1 class="login-title">Connect MES</h1>
+      <p id="login-subtitle" class="login-subtitle" data-i18n="login.subtitle">Inicio de sesión para administración del OPC UA Bridge</p>
+      <form id="login-form" class="login-form">
+        <label><span data-i18n="login.username">Usuario</span>
+          <input id="login-username" type="text" autocomplete="username" required />
+        </label>
+        <label><span data-i18n="login.password">Password</span>
+          <input id="login-password" type="password" autocomplete="current-password" required />
+        </label>
+        <button id="btn-login" class="btn btn-login" type="submit" data-i18n="login.submit">Iniciar sesión</button>
+      </form>
+      <div id="login-error" class="login-error"></div>
+      <p class="login-note" data-i18n="login.note">Acceso habilitado solo para rol Optimotion.</p>
+    </div>
+  </section>
+
+  <div id="app-shell" class="hidden">
+    <header class="main-topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">CM</div>
+        <div class="topbar-brand-text">Connect MES</div>
+        <span id="nav-role-label" class="topbar-role">Optimotion</span>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-user-pill"><span id="nav-welcome-label" data-i18n="nav.welcome">Bienvenido</span> <strong id="nav-username">-</strong></div>
+        <button id="btn-lang-toggle" class="topbar-mini-btn" type="button">ES</button>
+        <button id="btn-theme-toggle" class="topbar-mini-btn" type="button">☀</button>
+        <button id="btn-logout" class="topbar-logout" type="button" data-i18n="nav.logout">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <header class="hero">
+        <h1>Connect MES</h1>
+        <p class="hero-subtitle" data-i18n="hero.subtitle">Optimización Integral para Producción</p>
+        <div class="hero-badges">
+          <span class="hero-badge" data-i18n="hero.modules">Módulos MES</span>
+          <span id="hero-role-label" class="hero-badge role">Optimotion</span>
+        </div>
+        <p class="hero-bridge-title">OPCUA -> MQTT BRIDGE</p>
+      </header>
+
+      <section class="tabs-bar">
+        <button class="tab-btn active" data-tab-target="status" data-i18n="tabs.status">Estado</button>
+        <button class="tab-btn" data-tab-target="settings" data-i18n="tabs.settings">Configuracion</button>
+        <button class="tab-btn" data-tab-target="opcservers" data-i18n="tabs.opcServers">Servidores OPC</button>
+        <button class="tab-btn" data-tab-target="mappings" data-i18n="tabs.mappings">Mapeo estaciones</button>
+        <button class="tab-btn" data-tab-target="backup" data-i18n="tabs.backup">Respaldo</button>
+      </section>
+
+      <section class="card tab-panel active" data-tab="status">
+        <div class="card-title-row">
+          <h2 data-i18n="status.title">Estado runtime</h2>
+          <button id="btn-refresh-status" class="btn btn-secondary" data-i18n="actions.refresh">Refrescar</button>
+        </div>
+
+        <div id="status-summary" class="status-summary" aria-live="polite"></div>
+
+        <div class="status-table-block">
+          <h3 data-i18n="status.connections">Conexiones</h3>
+          <div class="status-table-wrap">
+            <table class="status-table">
+              <thead>
+                <tr>
+                  <th data-i18n="status.service">Servicio</th>
+                  <th data-i18n="status.name">Nombre</th>
+                  <th data-i18n="status.endpoint">Endpoint</th>
+                  <th data-i18n="status.state">Estado</th>
+                  <th data-i18n="status.message">Mensaje</th>
+                </tr>
+              </thead>
+              <tbody id="status-table-body">
+                <tr>
+                  <td colspan="5" data-i18n="status.loading">Cargando...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="status-message-grid">
+          <div class="status-message-panel">
+            <h3 data-i18n="status.mqtt">MQTT</h3>
+            <div id="status-mqtt-message" class="messages" data-i18n="status.waiting">Esperando estado...</div>
+          </div>
+          <div class="status-message-panel">
+            <h3 data-i18n="status.opcServersTitle">Servidores OPC UA</h3>
+            <div id="status-opc-message" class="messages" data-i18n="status.waiting">Esperando estado...</div>
+          </div>
+        </div>
+
+        <h3 data-i18n="status.messages">Mensajes</h3>
+        <div id="messages" class="messages"></div>
+      </section>
+
+      <section class="card tab-panel" data-tab="settings">
+        <h2 data-i18n="settings.title">Configuracion general</h2>
+        <div class="grid four">
+          <label><span data-i18n="settings.mqttUrl">MQTT URL</span><input id="mqtt-url" type="text" placeholder="mqtt://broker:1883" /></label>
+          <label><span data-i18n="settings.mqttUsername">MQTT Usuario</span><input id="mqtt-username" type="text" /></label>
+          <label><span data-i18n="settings.mqttPassword">MQTT Password</span><input id="mqtt-password" type="password" /></label>
+          <label><span data-i18n="settings.mqttClientId">MQTT Client ID</span><input id="mqtt-client-id" type="text" /></label>
+        </div>
+        <div class="grid four">
+          <label><span data-i18n="settings.topicA">Canal A</span><input id="topic-oee" type="text" placeholder="optimotion/oee" /></label>
+          <label><span data-i18n="settings.topicB">Canal B</span><input id="topic-estop" type="text" placeholder="optimotion/estop" /></label>
+          <label><span data-i18n="settings.mqttQos">MQTT QoS</span><input id="mqtt-qos" type="number" min="0" max="2" /></label>
+          <label class="checkbox"><span data-i18n="settings.mqttRetain">MQTT Retain</span><input id="mqtt-retain" type="checkbox" /></label>
+        </div>
+        <div class="grid four">
+          <label><span data-i18n="settings.pollInterval">Poll Interval (ms)</span><input id="poll-interval" type="number" min="100" step="100" /></label>
+          <label><span data-i18n="settings.connectmesApiUrl">ConnectMES API URL</span><input id="connectmes-base-url" type="text" placeholder="http://backend:3000" /></label>
+          <label><span data-i18n="settings.connectmesStationsPath">Stations Path</span><input id="connectmes-stations-path" type="text" placeholder="/api/stations/assignment/stations" /></label>
+          <label><span data-i18n="settings.connectmesToken">ConnectMES API Token</span><input id="connectmes-token" type="password" /></label>
+        </div>
+        <div class="actions">
+          <button id="btn-save-config" class="btn" data-i18n="actions.saveConfig">Guardar configuracion</button>
+          <button id="btn-reconnect" class="btn btn-secondary" data-i18n="actions.reconnect">Reconectar runtime</button>
+          <button id="btn-reload-stations" class="btn btn-secondary" data-i18n="actions.reloadStations">Recargar estaciones</button>
+        </div>
+        <div id="save-status-indicator" class="save-status-indicator hidden" aria-live="polite"></div>
+      </section>
+
+      <section class="card tab-panel" data-tab="opcservers">
+        <div class="card-title-row">
+          <h2 data-i18n="opc.title">Servidores OPC UA</h2>
+          <div class="card-header-tools">
+            <button id="btn-expand-all-opc" class="btn btn-secondary" type="button" data-i18n="actions.expandAll">Expandir todo</button>
+            <button id="btn-collapse-all-opc" class="btn btn-secondary" type="button" data-i18n="actions.collapseAll">Colapsar todo</button>
+            <button id="btn-add-opc-server" class="btn btn-secondary" data-i18n="opc.add">Agregar servidor OPC</button>
+          </div>
+        </div>
+        <p class="hint" data-i18n="opc.hint">Define multiples OPC servers y el servidor por defecto para browsing y mappings nuevos.</p>
+        <label><span data-i18n="settings.defaultOpcServer">Servidor OPC por defecto</span>
+          <select id="opc-default-server"></select>
+        </label>
+        <div id="opc-servers-list"></div>
+        <div class="actions">
+          <button id="btn-save-opc-servers" class="btn" data-i18n="opc.save">Guardar servidores OPC</button>
+        </div>
+        <div id="opc-save-status-indicator" class="save-status-indicator hidden" aria-live="polite"></div>
+      </section>
+
+      <section class="card tab-panel" data-tab="mappings">
+        <div class="card-title-row">
+          <h2 data-i18n="mappings.title">Mapeo de estaciones y tags</h2>
+          <div class="card-header-tools">
+            <button id="btn-expand-all-mappings" class="btn btn-secondary" type="button" data-i18n="actions.expandAll">Expandir todo</button>
+            <button id="btn-collapse-all-mappings" class="btn btn-secondary" type="button" data-i18n="actions.collapseAll">Colapsar todo</button>
+            <button id="btn-add-mapping" class="btn btn-secondary" data-i18n="mappings.add">Agregar estacion</button>
+          </div>
+        </div>
+        <p class="hint" data-i18n="mappings.hint">Selecciona la estacion de ConnectMES para autocompletar contexto operativo. Puedes escribir NodeId manual o usar la lupa.</p>
+        <div id="mappings-list" class="mappings-list"></div>
+        <div class="actions">
+          <button id="btn-save-mappings" class="btn" data-i18n="mappings.save">Guardar mappings</button>
+        </div>
+      </section>
+
+      <section class="card tab-panel" data-tab="backup">
+        <div class="card-title-row">
+          <h2 data-i18n="backup.title">Respaldo de configuración</h2>
+        </div>
+        <p class="hint" data-i18n="backup.hint">Descarga un archivo con toda la configuración del bridge o importa un respaldo para restaurarla.</p>
+
+        <div class="actions">
+          <button id="btn-download-backup" class="btn" type="button" data-i18n="backup.download">Descargar respaldo</button>
+        </div>
+
+        <div class="grid two">
+          <label>
+            <span data-i18n="backup.file">Archivo de respaldo (JSON)</span>
+            <input id="backup-file-input" type="file" accept="application/json,.json" />
+          </label>
+          <label>
+            <span data-i18n="backup.selected">Archivo seleccionado</span>
+            <input id="backup-file-name" type="text" readonly data-i18n-placeholder="backup.noneSelected" placeholder="Ninguno" />
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="btn-import-backup" class="btn btn-secondary" type="button" data-i18n="backup.import">Importar respaldo</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="backup-import-mode-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-close="true"></div>
+    <div class="modal-panel import-mode-panel">
+      <div class="card-title-row">
+        <h2 data-i18n="backup.importMode.title">Modo de importación</h2>
+        <button id="btn-close-backup-import-modal" class="btn btn-secondary" type="button" data-i18n="actions.close">Cerrar</button>
+      </div>
+
+      <p class="hint" data-i18n="backup.importMode.hint">Elige cómo aplicar el respaldo seleccionado.</p>
+      <p id="backup-import-mode-selected-file" class="hint backup-import-file"></p>
+
+      <div class="import-preview">
+        <h3 data-i18n="backup.importMode.previewTitle">Contenido detectado</h3>
+        <div class="import-preview-grid">
+          <article class="import-preview-card">
+            <span data-i18n="backup.importMode.previewOpc">Servidores OPC en archivo</span>
+            <strong id="backup-preview-opc-count">0</strong>
+          </article>
+          <article class="import-preview-card">
+            <span data-i18n="backup.importMode.previewMappings">Mappings en archivo</span>
+            <strong id="backup-preview-mappings-count">0</strong>
+          </article>
+        </div>
+      </div>
+
+      <div class="import-mode-options">
+        <label class="import-mode-option">
+          <input type="radio" name="backup-import-mode" value="overwrite" checked />
+          <div class="import-mode-copy">
+            <strong data-i18n="backup.importMode.overwrite">Sobrescribir todo</strong>
+            <p data-i18n="backup.importMode.overwriteDesc">Reemplaza toda la configuración actual con el contenido del archivo.</p>
+          </div>
+        </label>
+
+        <label class="import-mode-option">
+          <input type="radio" name="backup-import-mode" value="merge" />
+          <div class="import-mode-copy">
+            <strong data-i18n="backup.importMode.merge">Hacer merge</strong>
+            <p data-i18n="backup.importMode.mergeDesc">Conserva lo existente y combina con el archivo. En conflictos, gana el respaldo importado.</p>
+          </div>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="btn-cancel-backup-import" class="btn btn-secondary" type="button" data-i18n="backup.importMode.cancel">Cancelar</button>
+        <button id="btn-confirm-backup-import" class="btn" type="button" data-i18n="backup.importMode.confirm">Continuar importación</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tag-browser-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-modal-close="true"></div>
+    <div class="modal-panel">
+      <div class="card-title-row">
+        <h2 data-i18n="browser.title">Selector de Tag OPC UA</h2>
+        <div class="modal-header-tools">
+          <button id="btn-lang-toggle-modal" class="topbar-mini-btn" type="button">ES</button>
+          <button id="btn-theme-toggle-modal" class="topbar-mini-btn" type="button">☀</button>
+          <button id="btn-close-modal" class="btn btn-secondary" type="button" data-i18n="actions.close">Cerrar</button>
+        </div>
+      </div>
+
+      <div class="grid three">
+        <label>Servidor OPC
+          <select id="browser-server-select"></select>
+        </label>
+        <label>Nodo actual<input id="browser-current-node" type="text" value="RootFolder" /></label>
+        <label>Nodo seleccionado<input id="browser-selected-node" type="text" readonly /></label>
+      </div>
+
+      <div class="actions">
+        <button id="btn-browse-back" class="btn btn-secondary" type="button" data-i18n="browser.back">Atras</button>
+        <button id="btn-browse-root" class="btn btn-secondary" type="button" data-i18n="browser.root">Ir a RootFolder</button>
+        <button id="btn-browse-node" class="btn" type="button" data-i18n="browser.browse">Browse nodo</button>
+        <button id="btn-read-selected" class="btn btn-secondary" type="button" data-i18n="browser.read">Leer valor</button>
+        <button id="btn-use-selected" class="btn" type="button" data-i18n="browser.use">Usar seleccionado</button>
+      </div>
+
+      <div class="grid two">
+        <label>Buscar en arbol cargado
+          <input id="browser-search" type="text" placeholder="filtrar por browseName, displayName o nodeId" />
+        </label>
+        <div class="actions align-end">
+          <button id="btn-browser-search-clear" class="btn btn-secondary" type="button" data-i18n="browser.clearFilter">Limpiar filtro</button>
+        </div>
+      </div>
+
+      <p class="hint" id="browser-active-target">Campo activo: ninguno</p>
+      <pre id="browser-node-value" class="status-box browser-value">Sin lectura</pre>
+      <div id="browser-list" class="browser-list"></div>
+    </div>
+  </div>
+
+  <template id="opc-server-template">
+    <article class="mapping-item opc-server-item">
+      <div class="mapping-header">
+        <h3 data-i18n="opc.itemTitle">Servidor OPC</h3>
+        <div class="mapping-header-actions">
+          <button class="btn btn-secondary btn-collapse" data-action="toggle-collapse" type="button" data-i18n="actions.expand">Expandir</button>
+          <button class="btn btn-danger" data-action="remove-opc-server" type="button" data-i18n="actions.delete">Eliminar</button>
+        </div>
+      </div>
+      <div data-collapsible-body>
+      <div class="grid four">
+        <label>ID servidor<input data-field="serverId" type="text" placeholder="opc-1" /></label>
+        <label>Nombre<input data-field="serverName" type="text" placeholder="OPC Server 1" /></label>
+        <label>Endpoint<input data-field="serverEndpoint" type="text" placeholder="opc.tcp://127.0.0.1:4840" /></label>
+        <label class="checkbox">Habilitado<input data-field="serverEnabled" type="checkbox" /></label>
+      </div>
+      <div class="grid four">
+        <label>Security Mode
+          <select data-field="serverSecurityMode">
+            <option value="None">None</option>
+            <option value="Sign">Sign</option>
+            <option value="SignAndEncrypt">SignAndEncrypt</option>
+          </select>
+        </label>
+        <label>Security Policy
+          <select data-field="serverSecurityPolicy">
+            <option value="None">None</option>
+            <option value="Basic128Rsa15">Basic128Rsa15</option>
+            <option value="Basic256">Basic256</option>
+            <option value="Basic256Sha256">Basic256Sha256</option>
+            <option value="Aes128_Sha256_RsaOaep">Aes128_Sha256_RsaOaep</option>
+            <option value="Aes256_Sha256_RsaPss">Aes256_Sha256_RsaPss</option>
+          </select>
+        </label>
+        <label><span data-i18n="opc.authType">Autenticación OPC</span>
+          <select data-field="serverAuthType">
+            <option value="anonymous" data-i18n="opc.authAnonymous">Anónimo</option>
+            <option value="username" data-i18n="opc.authUsername">Usuario/Password</option>
+            <option value="certificate" data-i18n="opc.authCertificate">Certificado de usuario</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint" data-i18n="opc.authHint">Puedes usar anónimo, usuario/password o certificado X509 de usuario según soporte del servidor OPC.</p>
+      <div class="grid four" data-auth-scope="username">
+        <label><span data-i18n="opc.username">Usuario OPC</span><input data-field="serverUsername" type="text" /></label>
+        <label><span data-i18n="opc.password">Password OPC</span><input data-field="serverPassword" type="password" /></label>
+      </div>
+      <div class="grid two" data-auth-scope="certificate">
+        <label><span data-i18n="opc.userCertFile">Ruta certificado usuario</span><input data-field="serverUserCertificateFile" type="text" placeholder="./certs/user-cert.pem" /></label>
+        <label><span data-i18n="opc.userKeyFile">Ruta llave privada usuario</span><input data-field="serverUserPrivateKeyFile" type="text" placeholder="./certs/user-key.pem" /></label>
+      </div>
+      <div class="grid two" data-auth-scope="certificate">
+        <label><span data-i18n="opc.uploadCert">Archivo certificado</span><input data-field="uploadCertificateFile" type="file" accept=".pem,.crt,.cer,.der" /></label>
+        <label><span data-i18n="opc.uploadKey">Archivo llave privada</span><input data-field="uploadPrivateKeyFile" type="file" accept=".pem,.key" /></label>
+      </div>
+      <div class="upload-file-summary" data-auth-scope="certificate">
+        <span data-field="upload-file-summary">Sin archivos seleccionados</span>
+      </div>
+      <div class="actions" data-auth-scope="certificate">
+        <button class="btn btn-secondary" data-action="upload-opc-certificate" type="button" data-i18n="opc.uploadAction">Subir archivos al bridge</button>
+        <button class="btn btn-danger" data-action="delete-opc-certificate" type="button" data-i18n="opc.deleteUpload">Eliminar certificados subidos</button>
+      </div>
+      <div class="upload-status-indicator hidden" data-field="upload-status" data-auth-scope="certificate" aria-live="polite">Sin estado</div>
+      <div class="grid two" data-auth-scope="certificate">
+        <label><span data-i18n="opc.userCertRef">Certificado cargado (interno)</span><input data-field="serverUserCertificateRef" type="text" readonly /></label>
+        <label><span data-i18n="opc.userKeyRef">Llave cargada (interna)</span><input data-field="serverUserPrivateKeyRef" type="text" readonly /></label>
+      </div>
+      </div>
+    </article>
+  </template>
+
+  <template id="mapping-template">
+    <article class="mapping-item">
+      <div class="mapping-header">
+        <h3><span data-i18n="mappings.station">Estación</span> <span data-field="station-title"></span></h3>
+        <div class="mapping-header-actions">
+          <button class="btn btn-secondary btn-collapse" data-action="toggle-collapse" type="button" data-i18n="actions.expand">Expandir</button>
+          <button class="btn btn-danger" data-action="remove" data-i18n="actions.delete">Eliminar</button>
+        </div>
+      </div>
+
+      <div data-collapsible-body>
+
+      <div class="grid four">
+        <label><span data-i18n="mappings.facility">Facility</span><select data-field="facilityId"></select></label>
+        <label><span data-i18n="mappings.area">Area</span><select data-field="areaId"></select></label>
+        <label><span data-i18n="mappings.line">Linea</span><select data-field="lineId"></select></label>
+        <label><span data-i18n="mappings.stationConnectmes">Estacion ConnectMES</span><select data-field="stationId"></select></label>
+      </div>
+
+      <div class="grid one">
+        <label><span data-i18n="mappings.opcServer">Servidor OPC</span>
+          <select data-field="opcServerId"></select>
+        </label>
+      </div>
+
+      <div class="grid one">
+        <label><span data-i18n="mappings.sampleScale">Escala de muestreo</span><input data-field="Resolution" type="number" min="1" /></label>
+      </div>
+
+      <h4 data-i18n="mappings.functionalities">Funcionalidades y canales</h4>
+      <div data-field="functionalities-list"></div>
+      <div class="actions">
+        <button class="btn btn-secondary" type="button" data-action="add-functionality" data-i18n="mappings.addFunctionality">Agregar funcionalidad</button>
+      </div>
+
+      </div>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>

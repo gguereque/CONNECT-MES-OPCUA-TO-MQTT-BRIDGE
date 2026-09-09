@@ -1,0 +1,12 @@
+ConnectMES OPC UA MQTT Bridge
+
+Este asistente le guiará para instalar el conector de datos desde OPC UA hacia MQTT para la plataforma ConnectMES.
+
+El bridge permite publicar señales de producción, estado de máquina y eventos hacia el broker MQTT que consumen los servicios de la plataforma empresarial.
+
+Antes de continuar, asegúrese de que:
+- el broker MQTT esté disponible,
+- el servidor OPC UA sea accesible,
+- el puerto HTTP configurado para la UI del bridge esté libre.
+
+La instalación se realizará con los ajustes estándar de la solución ConnectMES.

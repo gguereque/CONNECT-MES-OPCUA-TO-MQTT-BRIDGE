@@ -1,0 +1,49 @@
+{
+  "name": "opcua-mqtt-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OPC UA to MQTT bridge for CONNECT-MES contract",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "bundle:server": "node scripts/package/bundle-server.js",
+    "prepare:native": "node scripts/package/fetch-native-win32.js",
+    "obfuscate": "javascript-obfuscator build/backend.bundle.js --output build/backend.protected.js --compact true --self-defending false --string-array true --string-array-encoding rc4",
+    "stage:dist": "node scripts/package/stage-dist.js",
+    "compile": "cd dist-server && pkg .",
+    "release": "npm run bundle:server && npm run prepare:native && npm run obfuscate && npm run stage:dist && npm run compile",
+    "release:dry-run": "npm run bundle:server && npm run obfuscate && node scripts/package/stage-dist.js --target=host && cd dist-server && pkg .",
+    "build:installer": "node scripts/package/build-installer.js"
+  },
+  "pkg": {
+    "assets": [
+      "src/public/**/*",
+      "config/*.json",
+      "config/*.example",
+      "data/**/*",
+      "certs/**/*"
+    ],
+    "targets": [
+      "node22-win-x64",
+      "node22-linux-x64"
+    ],
+    "outputPath": "."
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mqtt": "^5.14.1",
+    "multer": "^2.0.2",
+    "node-opcua": "^2.132.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.22.0",
+    "esbuild": "^0.28.2",
+    "jest": "^29.7.0",
+    "javascript-obfuscator": "^5.6.0"
+  }
+}

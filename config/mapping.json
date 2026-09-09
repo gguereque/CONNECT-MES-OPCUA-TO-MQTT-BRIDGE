@@ -1,0 +1,33 @@
+{
+  "topics": {
+    "oee": "optimotion/oee",
+    "estop": "optimotion/estop"
+  },
+  "defaults": {
+    "Resolution": 1
+  },
+  "stations": [
+    {
+      "stationId": 125,
+      "context": {
+        "facilities": "37",
+        "Area": "39",
+        "Line": "81"
+      },
+      "publish": {
+        "oee": true,
+        "estop": true,
+        "oeeOnlyOnChange": false,
+        "estopOnlyOnChange": true
+      },
+      "nodes": {
+        "marcha": "ns=3;s=Machine125.Run",
+        "parts_count": "ns=3;s=Machine125.PartsCount",
+        "parts_rejected": "ns=3;s=Machine125.PartsRejected",
+        "Resolution": "ns=3;s=Machine125.Resolution",
+        "estop_status": "ns=3;s=Machine125.EstopStatus",
+        "estop_motive": "ns=3;s=Machine125.EstopMotive"
+      }
+    }
+  ]
+}
