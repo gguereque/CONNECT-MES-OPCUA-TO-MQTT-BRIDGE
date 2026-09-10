@@ -6,7 +6,7 @@ services:
     container_name: connectmes-mosquitto
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "1886:1886"
       - "9001:9001"
     volumes:
       - ./mosquitto/config:/mosquitto/config
@@ -25,7 +25,7 @@ services:
     environment:
       - NODE_ENV=production
       - BRIDGE_CERTS_DIR=/app/certs
-      - MQTT_URL=mqtt://mosquitto:1883
+      - MQTT_URL=mqtt://mosquitto:1886
     ports:
       - "${BRIDGE_WEB_PORT:-3400}:${BRIDGE_WEB_PORT:-3400}"
     depends_on:
