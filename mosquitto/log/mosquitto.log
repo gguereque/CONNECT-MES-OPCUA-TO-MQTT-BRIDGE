@@ -1,0 +1,77 @@
+1789002773: mosquitto version 2.0.22 starting
+1789002773: Config loaded from /mosquitto/config/mosquitto.conf.
+1789002773: Opening ipv4 listen socket on port 1883.
+1789002773: Opening ipv6 listen socket on port 1883.
+1789002773: mosquitto version 2.0.22 running
+1789002808: mosquitto version 2.0.22 terminating
+1789002808: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1789002813: mosquitto version 2.0.22 starting
+1789002813: Config loaded from /mosquitto/config/mosquitto.conf.
+1789002813: Opening ipv4 listen socket on port 1883.
+1789002813: Opening ipv6 listen socket on port 1883.
+1789002813: mosquitto version 2.0.22 running
+1789003026: mosquitto version 2.0.22 starting
+1789003026: Config loaded from /mosquitto/config/mosquitto.conf.
+1789003026: Opening ipv4 listen socket on port 1883.
+1789003026: Opening ipv6 listen socket on port 1883.
+1789003026: mosquitto version 2.0.22 running
+1789003242: mosquitto version 2.0.22 starting
+1789003242: Config loaded from /mosquitto/config/mosquitto.conf.
+1789003242: Opening ipv4 listen socket on port 1883.
+1789003242: Opening ipv6 listen socket on port 1883.
+1789003242: mosquitto version 2.0.22 running
+1789003293: mosquitto version 2.0.22 starting
+1789003293: Config loaded from /mosquitto/config/mosquitto.conf.
+1789003293: Opening ipv4 listen socket on port 1883.
+1789003293: Opening ipv6 listen socket on port 1883.
+1789003293: mosquitto version 2.0.22 running
+1789056175: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1789057863: mosquitto version 2.0.22 starting
+1789057863: Config loaded from /mosquitto/config/mosquitto.conf.
+1789057863: Opening ipv4 listen socket on port 1883.
+1789057863: Opening ipv6 listen socket on port 1883.
+1789057863: mosquitto version 2.0.22 running
+1789057987: mosquitto version 2.0.22 starting
+1789057987: Config loaded from /mosquitto/config/mosquitto.conf.
+1789057987: Opening ipv4 listen socket on port 1883.
+1789057987: Opening ipv6 listen socket on port 1883.
+1789057987: mosquitto version 2.0.22 running
+1789059724: mosquitto version 2.0.22 starting
+1789059724: Config loaded from /mosquitto/config/mosquitto.conf.
+1789059724: Opening ipv4 listen socket on port 1883.
+1789059724: Opening ipv6 listen socket on port 1883.
+1789059724: mosquitto version 2.0.22 running
+1789059759: mosquitto version 2.0.22 starting
+1789059759: Config loaded from /mosquitto/config/mosquitto.conf.
+1789059759: Opening ipv4 listen socket on port 1883.
+1789059759: Opening ipv6 listen socket on port 1883.
+1789059759: mosquitto version 2.0.22 running
+1789065711: mosquitto version 2.0.22 starting
+1789065711: Config loaded from /mosquitto/config/mosquitto.conf.
+1789065711: Opening ipv4 listen socket on port 1883.
+1789065711: Opening ipv6 listen socket on port 1883.
+1789065711: mosquitto version 2.0.22 running
+1789066190: mosquitto version 2.0.22 starting
+1789066190: Config loaded from /mosquitto/config/mosquitto.conf.
+1789066190: Opening ipv4 listen socket on port 1883.
+1789066190: Opening ipv6 listen socket on port 1883.
+1789066190: mosquitto version 2.0.22 running
+1789066462: mosquitto version 2.0.22 starting
+1789066462: Config loaded from /mosquitto/config/mosquitto.conf.
+1789066462: Opening ipv4 listen socket on port 1883.
+1789066462: Opening ipv6 listen socket on port 1883.
+1789066462: mosquitto version 2.0.22 running
+1789067122: mosquitto version 2.0.22 starting
+1789067122: Config loaded from /mosquitto/config/mosquitto.conf.
+1789067122: Opening ipv4 listen socket on port 1883.
+1789067122: Opening ipv6 listen socket on port 1883.
+1789067122: mosquitto version 2.0.22 running
+1789067254: mosquitto version 2.0.22 terminating
+1789067254: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1789067267: mosquitto version 2.0.22 starting
+1789067267: Config loaded from /mosquitto/config/mosquitto.conf.
+1789067267: Opening ipv4 listen socket on port 1883.
+1789067267: Opening ipv6 listen socket on port 1883.
+1789067267: mosquitto version 2.0.22 running
+1789067303: New connection from 172.19.0.3:46866 on port 1883.
+1789067303: New client connected from 172.19.0.3:46866 as connectmes-opcua-bridge (p2, c1, k60).

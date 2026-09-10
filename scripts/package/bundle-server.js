@@ -10,7 +10,7 @@ const ENTRY = path.join(ROOT, 'src', 'index.js');
 const BUILD_DIR = path.join(ROOT, 'build');
 const OUT_FILE = path.join(BUILD_DIR, 'backend.bundle.js');
 
-const EXTERNAL_PACKAGES = ['better-sqlite3', 'proper-lockfile', '@ster5/global-mutex'];
+const EXTERNAL_PACKAGES = ['proper-lockfile', '@ster5/global-mutex'];
 
 async function main() {
   fs.mkdirSync(BUILD_DIR, { recursive: true });

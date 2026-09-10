@@ -26,6 +26,8 @@ services:
     environment:
       - NODE_ENV=production
       - BRIDGE_CERTS_DIR=/app/certs
+      - CONNECTMES_API_BASE_URL=https://connectmes.com.mx/api
+      - CONNECTMES_STATIONS_PATH=/api/stations/assignment/stations
       - MQTT_URL=mqtt://mosquitto:1886
     ports:
       - "${BRIDGE_WEB_PORT:-3400}:${BRIDGE_WEB_PORT:-3400}"

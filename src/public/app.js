@@ -1188,7 +1188,7 @@ function fillConfigForm(config) {
   cfgFields.topicEstop.value = config?.topics?.estop || 'optimotion/estop';
   cfgFields.pollInterval.value = String(config?.app?.pollIntervalMs ?? 1000);
 
-  cfgFields.connectmesBaseUrl.value = config?.connectmes?.baseUrl || '';
+  cfgFields.connectmesBaseUrl.value = config?.connectmes?.baseUrl || 'https://connectmes.com.mx/api';
   cfgFields.connectmesStationsPath.value = config?.connectmes?.stationsPath || '/api/stations/assignment/stations';
   cfgFields.connectmesToken.value = config?.connectmes?.token || '';
 }
@@ -1211,8 +1211,8 @@ function getConfigPayload() {
       pollIntervalMs: Number.parseInt(cfgFields.pollInterval.value || '1000', 10),
     },
     connectmes: {
-      baseUrl: cfgFields.connectmesBaseUrl.value.trim(),
-      stationsPath: cfgFields.connectmesStationsPath.value.trim(),
+      baseUrl: cfgFields.connectmesBaseUrl.value.trim() || 'https://connectmes.com.mx/api',
+      stationsPath: cfgFields.connectmesStationsPath.value.trim() || '/api/stations/assignment/stations',
       token: cfgFields.connectmesToken.value,
     },
     opcua: collectOpcServersPayload(),

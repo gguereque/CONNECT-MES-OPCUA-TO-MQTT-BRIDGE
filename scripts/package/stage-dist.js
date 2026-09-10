@@ -8,10 +8,9 @@ const { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const DIST_DIR = path.join(ROOT, 'dist-server');
 const OBFUSCATED_BUNDLE = path.join(ROOT, 'build', 'backend.protected.js');
-const VENDOR_NATIVE = path.join(ROOT, 'vendor', 'native', 'win32-x64', 'better_sqlite3.node');
 const NPM_CMD = process.platform === 'win32' ? 'cmd.exe' : 'npm';
 
-const EXTERNAL_RUNTIME_DEPS = ['better-sqlite3'];
+const EXTERNAL_RUNTIME_DEPS = [];
 
 function parseTarget(argv) {
   const arg = argv.find((a) => a.startsWith('--target='));
@@ -41,9 +40,6 @@ function main() {
 
   if (!fs.existsSync(OBFUSCATED_BUNDLE)) {
     throw new Error(`No se encontró ${OBFUSCATED_BUNDLE} — corre "npm run bundle:server" y "npm run obfuscate" primero.`);
-  }
-  if (target === 'win32-x64' && !fs.existsSync(VENDOR_NATIVE)) {
-    throw new Error(`No se encontró ${VENDOR_NATIVE} — corre "npm run prepare:native" primero.`);
   }
 
   fs.rmSync(DIST_DIR, { recursive: true, force: true });
@@ -83,7 +79,6 @@ function main() {
         'public/**/*',
         'config/**/*',
         'data/**/*',
-        'node_modules/better-sqlite3/build/Release/*.node',
       ],
     },
   };
@@ -96,12 +91,6 @@ function main() {
     : npmArgs;
 
   execFileSync(NPM_CMD, spawnArgs, { cwd: DIST_DIR, stdio: 'inherit' });
-
-  if (target === 'win32-x64') {
-    const targetNodeFile = path.join(DIST_DIR, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
-    fs.mkdirSync(path.dirname(targetNodeFile), { recursive: true });
-    fs.copyFileSync(VENDOR_NATIVE, targetNodeFile);
-  }
 
   console.log(`\ndist-server/ listo en ${DIST_DIR} (target: ${target})`);
 }

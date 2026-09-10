@@ -104,14 +104,12 @@ function getConnectMesBaseUrl(store) {
 }
 
 function getConnectMesBaseUrlCandidates(store) {
+  // Solo el host configurado: los hostnames docker-internos (backend:3000, etc.)
+  // no resuelven cuando el bridge corre standalone contra el dominio publico, y al
+  // fallar con un error de red (sin status 404) abortaban el fallback de ruta
+  // /auth/profile -> /api/auth/profile antes de intentarlo en el host correcto.
   const configured = getConnectMesBaseUrl(store);
-  const candidates = [
-    configured,
-    'http://backend:3000',
-    'http://connectmes-backend:3000',
-  ].filter(Boolean);
-
-  return [...new Set(candidates.map((item) => String(item).replace(/\/+$/, '')))];
+  return configured ? [configured.replace(/\/+$/, '')] : [];
 }
 
 function getConnectMesStationsPath(store) {
@@ -160,6 +158,8 @@ async function requestConnectMesAtBase(baseUrl, endpointPath, { method = 'GET', 
   const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
   const url = `${baseUrl}${normalizedPath}`;
 
+  console.log(`Requesting ConnectMES at URL: ${url}`);
+
   const headers = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -186,6 +186,7 @@ async function requestConnectMesAtBase(baseUrl, endpointPath, { method = 'GET', 
     const message = typeof data === 'object' && data?.error
       ? data.error
       : String(text || response.statusText || 'ConnectMES request failed');
+    console.error(`ConnectMES ${method} ${url} -> ${response.status}: ${message}`);
     const error = new Error(message);
     error.status = response.status;
     error.baseUrl = baseUrl;
