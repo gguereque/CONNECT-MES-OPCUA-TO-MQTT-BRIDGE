@@ -142,7 +142,14 @@ class BridgeRuntime {
     this.state.pollIntervalMs = Number(this.settings?.app?.pollIntervalMs || 1000);
 
     if (reconnect) {
-      await this.reconnectClients();
+      try {
+        await this.reconnectClients();
+      } catch (error) {
+        // No abortar el reload: aun si OPC/MQTT fallan, hay que dejar el
+        // polling y el retry loop de OPC corriendo para que se autorecupere.
+        this.state.lastError = error.message;
+        this.warn('Reconnect during reload failed:', error.message);
+      }
     }
 
     if (restartTimer || this.timer) {
@@ -158,6 +165,16 @@ class BridgeRuntime {
   }
 
   async reconnectClients() {
+    // Serializa llamadas concurrentes (p.ej. varios guardados de config seguidos):
+    // sin esto, dos connectMqtt() en paralelo dejan un cliente huerfano cuyos
+    // listeners viejos siguen pisando this.state.mqttConnected despues de conectar.
+    this.reconnectChain = (this.reconnectChain || Promise.resolve())
+      .catch(() => {})
+      .then(() => this._reconnectClientsInner());
+    return this.reconnectChain;
+  }
+
+  async _reconnectClientsInner() {
     this.disconnectMqtt();
     await this.disconnectOpc();
 
@@ -171,24 +188,31 @@ class BridgeRuntime {
       throw new Error('MQTT URL is required');
     }
 
-    this.mqttClient = mqtt.connect(mqttCfg.url, {
+    const client = mqtt.connect(mqttCfg.url, {
       username: mqttCfg.username || undefined,
       password: mqttCfg.password || undefined,
       clientId: mqttCfg.clientId || `connectmes-opcua-bridge-${Math.random().toString(16).slice(2, 8)}`,
       reconnectPeriod: 2000,
     });
+    this.mqttClient = client;
 
-    this.mqttClient.on('connect', () => {
+    // Solo el cliente activo actual puede mutar el estado compartido.
+    const isActive = () => this.mqttClient === client;
+
+    client.on('connect', () => {
+      if (!isActive()) return;
       this.state.mqttConnected = true;
       this.info(`MQTT connected: ${mqttCfg.url}`);
     });
 
-    this.mqttClient.on('reconnect', () => {
+    client.on('reconnect', () => {
+      if (!isActive()) return;
       this.state.mqttConnected = false;
       this.warn('MQTT reconnecting...');
     });
 
-    this.mqttClient.on('error', (err) => {
+    client.on('error', (err) => {
+      if (!isActive()) return;
       this.state.mqttConnected = false;
       this.state.lastError = err.message;
       this.error('MQTT error:', err.message);
@@ -197,12 +221,12 @@ class BridgeRuntime {
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('MQTT connection timeout')), 10_000);
 
-      this.mqttClient.once('connect', () => {
+      client.once('connect', () => {
         clearTimeout(timeout);
         resolve();
       });
 
-      this.mqttClient.once('error', (err) => {
+      client.once('error', (err) => {
         clearTimeout(timeout);
         reject(err);
       });
@@ -211,12 +235,14 @@ class BridgeRuntime {
 
   disconnectMqtt() {
     if (!this.mqttClient) return;
+    const client = this.mqttClient;
+    this.mqttClient = null;
+    client.removeAllListeners();
     try {
-      this.mqttClient.end(true);
+      client.end(true);
     } catch (err) {
       this.warn('Error closing MQTT:', err.message);
     }
-    this.mqttClient = null;
     this.state.mqttConnected = false;
   }
 

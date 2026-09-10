@@ -75,3 +75,13 @@
 1789067267: mosquitto version 2.0.22 running
 1789067303: New connection from 172.19.0.3:46866 on port 1883.
 1789067303: New client connected from 172.19.0.3:46866 as connectmes-opcua-bridge (p2, c1, k60).
+1789068193: mosquitto version 2.0.22 starting
+1789068193: Config loaded from /mosquitto/config/mosquitto.conf.
+1789068193: Opening ipv4 listen socket on port 1883.
+1789068193: Opening ipv6 listen socket on port 1883.
+1789068193: mosquitto version 2.0.22 running
+1789069537: mosquitto version 2.0.22 starting
+1789069537: Config loaded from /mosquitto/config/mosquitto.conf.
+1789069537: Opening ipv4 listen socket on port 1883.
+1789069537: Opening ipv6 listen socket on port 1883.
+1789069537: mosquitto version 2.0.22 running

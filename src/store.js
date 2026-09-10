@@ -346,8 +346,33 @@ function loadMappingJsonIfExists() {
 class BridgeStore {
   constructor(env = process.env) {
     this.env = env;
-    this.config = normalizeBridgeConfig(createDefaultConfigFromEnv(this.env), this.env);
+    const persisted = this.loadConfigFromDisk();
+    this.config = normalizeBridgeConfig(persisted || createDefaultConfigFromEnv(this.env), this.env);
     this.mappings = this.loadMappingsFromDisk();
+  }
+
+  getConfigFilePath() {
+    return path.resolve(process.cwd(), this.env.BRIDGE_CONFIG_FILE || './config/bridge-config.json');
+  }
+
+  loadConfigFromDisk() {
+    const configPath = this.getConfigFilePath();
+    if (!fs.existsSync(configPath)) return null;
+
+    try {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  persistConfigToDisk(config) {
+    const configPath = this.getConfigFilePath();
+    const dir = path.dirname(configPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
   }
 
   loadMappingsFromDisk() {
@@ -375,6 +400,7 @@ class BridgeStore {
 
   saveConfig(config) {
     this.config = normalizeBridgeConfig(config || {}, this.env);
+    this.persistConfigToDisk(this.config);
     return this.config;
   }
 
