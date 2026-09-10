@@ -126,8 +126,21 @@ function getStoredConnectMesToken(store) {
   return String(connectmes.token || '').trim();
 }
 
+const BRIDGE_ALLOWED_ROLES = new Set([
+  'optimotion',
+  'super usuario',
+  'superusuario',
+  'administrador',
+  'admin',
+  'supervisor',
+]);
+
+function isBridgeAuthorizedRole(roles = []) {
+  return roles.some((role) => BRIDGE_ALLOWED_ROLES.has(String(role).trim().toLowerCase()));
+}
+
 function isOptimotionRole(roles = []) {
-  return roles.some((role) => String(role).trim().toLowerCase() === 'optimotion');
+  return isBridgeAuthorizedRole(roles);
 }
 
 function extractBearerToken(req) {
@@ -248,7 +261,7 @@ async function requireOptimotionRole(req, res, next) {
     const roles = Array.isArray(profile?.roles) ? profile.roles : [];
 
     if (!isOptimotionRole(roles)) {
-      return res.status(403).json({ ok: false, error: 'Acceso restringido al rol Optimotion' });
+      return res.status(403).json({ ok: false, error: 'Acceso restringido a roles autorizados de ConnectMES' });
     }
 
     req.authToken = token;
@@ -310,7 +323,7 @@ function createWebApp({ store, runtime }) {
       const profile = await resolveProfileWithCache(store, token);
       const roles = Array.isArray(profile?.roles) ? profile.roles : [];
       if (!isOptimotionRole(roles)) {
-        return res.status(403).json({ ok: false, error: 'Acceso restringido al rol Optimotion' });
+        return res.status(403).json({ ok: false, error: 'Acceso restringido a roles autorizados de ConnectMES' });
       }
 
       return res.json({
@@ -524,4 +537,6 @@ function createWebApp({ store, runtime }) {
 
 module.exports = {
   createWebApp,
+  isBridgeAuthorizedRole,
+  isOptimotionRole,
 };

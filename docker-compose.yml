@@ -21,7 +21,8 @@ services:
       dockerfile: Dockerfile
     container_name: connectmes-opcua-mqtt-bridge
     env_file:
-      - ./.env
+      - path: ./.env
+        required: false
     environment:
       - NODE_ENV=production
       - BRIDGE_CERTS_DIR=/app/certs
