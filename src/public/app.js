@@ -212,6 +212,7 @@ const translations = {
     'mapping.field.Resolution': 'Escala de muestreo',
     'mapping.field.estop_status': 'Estado de evento',
     'mapping.field.estop_motive': 'Código de evento',
+    'mappings.counterModeDelta': 'Usar delta (ignorar reinicios del PLC)',
     'browser.title': 'Selector de Tag OPC UA',
     'browser.back': 'Atras',
     'browser.root': 'Ir a RootFolder',
@@ -414,6 +415,7 @@ const translations = {
     'mapping.field.Resolution': 'Sampling scale',
     'mapping.field.estop_status': 'Event state',
     'mapping.field.estop_motive': 'Event code',
+    'mappings.counterModeDelta': 'Use delta (ignore PLC resets)',
     'browser.title': 'OPC UA Tag Picker',
     'browser.back': 'Back',
     'browser.root': 'Go to RootFolder',
@@ -481,8 +483,8 @@ const translations = {
 const SIGNAL_DEFINITIONS_BY_TYPE = {
   pieceCount: [
     { key: 'marcha', labelKey: 'mapping.field.marcha', placeholder: 'ns=3;s=Device.Signal01' },
-    { key: 'parts_count', labelKey: 'mapping.field.parts_count', placeholder: 'ns=3;s=Device.Counter01' },
-    { key: 'parts_rejected', labelKey: 'mapping.field.parts_rejected', placeholder: 'ns=3;s=Device.Counter02' },
+    { key: 'parts_count', labelKey: 'mapping.field.parts_count', placeholder: 'ns=3;s=Device.Counter01', hasCounterMode: true },
+    { key: 'parts_rejected', labelKey: 'mapping.field.parts_rejected', placeholder: 'ns=3;s=Device.Counter02', hasCounterMode: true },
     { key: 'Resolution', labelKey: 'mapping.field.Resolution', placeholder: 'ns=3;s=Device.Scale01' },
   ],
   machineStates: [
@@ -1675,6 +1677,13 @@ function normalizeTriggerEvent(input = {}, fallbackMode = 'always') {
   };
 }
 
+function normalizeCounterModes(raw = {}) {
+  return {
+    parts_count: raw?.parts_count === 'delta' ? 'delta' : 'raw',
+    parts_rejected: raw?.parts_rejected === 'delta' ? 'delta' : 'raw',
+  };
+}
+
 function normalizeFunctionalitiesFromMapping(mapping = {}) {
   const legacyNodes = mapping.nodes || {};
 
@@ -1693,6 +1702,7 @@ function normalizeFunctionalitiesFromMapping(mapping = {}) {
         onlyOnChange: Boolean(raw.onlyOnChange),
         topic: String(raw.topic || ''),
         triggers,
+        counterModes: normalizeCounterModes(raw.counterModes),
         nodes: normalizeFunctionalityNodes(type.id, raw.nodes || {}, legacyNodes),
       };
     });
@@ -1713,6 +1723,7 @@ function normalizeFunctionalitiesFromMapping(mapping = {}) {
         triggerNodeId: legacyOee.triggerNodeId || '',
         intervalSeconds: legacyOee.intervalSeconds || 0,
       }, 'always')],
+      counterModes: normalizeCounterModes(mapping.counterModes),
       nodes: normalizeFunctionalityNodes('pieceCount', {}, legacyNodes),
     },
     {
@@ -1796,11 +1807,19 @@ function renderFunctionalitySignals(featureNode, feature = {}) {
     return;
   }
 
+  const currentCounterModes = feature.counterModes || {};
+
   const rows = signalDefs.map((signal) => {
     const value = String(currentNodes[signal.key] || '').trim();
+    const isDelta = signal.hasCounterMode && currentCounterModes[signal.key] === 'delta';
+    const counterModeHtml = signal.hasCounterMode
+      ? `<label class="checkbox"><input data-function-node-mode="${escapeHtml(signal.key)}" type="checkbox" ${isDelta ? 'checked' : ''} /><span data-i18n="mappings.counterModeDelta">${escapeHtml(t('mappings.counterModeDelta'))}</span></label>`
+      : '';
+
     return `
       <label><span data-i18n="${escapeHtml(signal.labelKey)}">${escapeHtml(t(signal.labelKey))}</span>
         <span class="input-picker"><input data-function-node="${escapeHtml(signal.key)}" type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(signal.placeholder || 'ns=3;s=Device.Tag01')}" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+        ${counterModeHtml}
       </label>
     `;
   }).join('');
@@ -2039,6 +2058,12 @@ function collectFunctionalitiesFromRow(row) {
       if (key && value) nodes[key] = value;
     }
 
+    const counterModes = {};
+    for (const checkbox of featureNode.querySelectorAll('[data-function-node-mode]')) {
+      const key = String(checkbox.getAttribute('data-function-node-mode') || '').trim();
+      if (key) counterModes[key] = checkbox.checked ? 'delta' : 'raw';
+    }
+
     return {
       id: String(featureNode.dataset.functionalityId || `${type.id}-${index + 1}`),
       name: String(featureNode.querySelector('[data-functionality-field="name"]')?.value || fallbackName).trim() || fallbackName,
@@ -2048,6 +2073,7 @@ function collectFunctionalitiesFromRow(row) {
       topic: String(featureNode.querySelector('[data-functionality-field="topic"]')?.value || '').trim(),
       triggers: readTriggerEventsFromFunctionality(featureNode),
       nodes,
+      counterModes,
     };
   });
 }
@@ -2421,7 +2447,13 @@ function createMappingNode(mapping = null) {
         if (name && nodeId) existingNodes[name] = nodeId;
       }
 
-      renderFunctionalitySignals(featureNode, { type: type.id, nodes: existingNodes });
+      const existingCounterModes = {};
+      for (const checkbox of featureNode.querySelectorAll('[data-function-node-mode]')) {
+        const key = String(checkbox.getAttribute('data-function-node-mode') || '').trim();
+        if (key) existingCounterModes[key] = checkbox.checked ? 'delta' : 'raw';
+      }
+
+      renderFunctionalitySignals(featureNode, { type: type.id, nodes: existingNodes, counterModes: existingCounterModes });
       updateFunctionalityTypeOptions(row);
       updateResolutionFromFunctionalities(row);
       return;

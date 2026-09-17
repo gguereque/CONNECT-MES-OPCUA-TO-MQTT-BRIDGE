@@ -1,24 +1,84 @@
 {
-  "topics": {
-    "oee": "optimotion/oee",
-    "estop": "optimotion/estop"
-  },
-  "defaults": {
-    "Resolution": 1
-  },
   "stations": [
     {
       "stationId": 125,
+      "opcServerId": "opc-1",
       "context": {
         "facilities": "37",
-        "Area": "39",
-        "Line": "81"
+        "Area": "Ensambles",
+        "Line": "Cepillos"
       },
+      "defaults": {
+        "Resolution": 1
+      },
+      "functionalities": [
+        {
+          "id": "pieceCount",
+          "name": "Piece Count",
+          "type": "pieceCount",
+          "enabled": true,
+          "onlyOnChange": false,
+          "topic": "",
+          "triggers": [
+            {
+              "mode": "always",
+              "triggerNodeId": "",
+              "intervalSeconds": 0
+            }
+          ],
+          "nodes": {
+            "marcha": "ns=3;s=Machine125.Run",
+            "parts_count": "ns=3;s=Machine125.PartsCount",
+            "parts_rejected": "ns=3;s=Machine125.PartsRejected",
+            "Resolution": "ns=3;s=Machine125.Resolution"
+          },
+          "counterModes": {
+            "parts_count": "delta",
+            "parts_rejected": "raw"
+          }
+        },
+        {
+          "id": "machineStates",
+          "name": "Machine States",
+          "type": "machineStates",
+          "enabled": true,
+          "onlyOnChange": true,
+          "topic": "",
+          "triggers": [
+            {
+              "mode": "onValueChanged",
+              "triggerNodeId": "",
+              "intervalSeconds": 0
+            }
+          ],
+          "nodes": {
+            "estop_status": "ns=3;s=Machine125.EstopStatus",
+            "estop_motive": "ns=3;s=Machine125.EstopMotive"
+          },
+          "counterModes": {}
+        }
+      ],
       "publish": {
         "oee": true,
         "estop": true,
         "oeeOnlyOnChange": false,
         "estopOnlyOnChange": true
+      },
+      "topics": {
+        "oee": "",
+        "estop": ""
+      },
+      "triggers": {
+        "oee": {
+          "mode": "always",
+          "triggerNodeId": "",
+          "intervalSeconds": 0
+        },
+        "estop": {
+          "mode": "onValueChanged",
+          "triggerNodeId": "",
+          "intervalSeconds": 0
+        }
       },
       "nodes": {
         "marcha": "ns=3;s=Machine125.Run",

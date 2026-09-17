@@ -27,6 +27,13 @@ function normalizeInt(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeCounterModes(raw = {}) {
+  return {
+    parts_count: raw?.parts_count === 'delta' ? 'delta' : 'raw',
+    parts_rejected: raw?.parts_rejected === 'delta' ? 'delta' : 'raw',
+  };
+}
+
 function sanitizeOpcNodeId(nodeId) {
   const raw = String(nodeId || '').trim();
   return raw || 'RootFolder';
@@ -76,6 +83,8 @@ class BridgeRuntime {
     this.lastOeeSignatureByStation = new Map();
     this.lastEstopStatusByStation = new Map();
     this.lastCustomSignatureByStation = new Map();
+    this.counterRawByKey = new Map();
+    this.counterAccumByKey = new Map();
   }
 
   info(...args) {
@@ -474,6 +483,7 @@ class BridgeRuntime {
         enabled: feature.enabled !== false,
         onlyOnChange: Boolean(feature.onlyOnChange),
         topic: String(feature.topic || ''),
+        counterModes: normalizeCounterModes(feature.counterModes),
         nodes: Object.fromEntries(
           Object.entries(feature.nodes || {}).filter(([, value]) => String(value || '').trim())
         ),
@@ -499,6 +509,7 @@ class BridgeRuntime {
         enabled: mapping.publish?.oee !== false,
         onlyOnChange: Boolean(mapping.publish?.oeeOnlyOnChange),
         topic: String(mapping.topics?.oee || ''),
+        counterModes: normalizeCounterModes(mapping.counterModes),
         nodes: {
           marcha: String(mapping.nodes?.marcha || ''),
           parts_count: String(mapping.nodes?.parts_count || ''),
@@ -575,6 +586,45 @@ class BridgeRuntime {
     return Math.max(1, Math.round(seconds / 60));
   }
 
+  counterAccumulatorKey(stationId, featureId, property) {
+    return `${stationId}:${featureId}:${property}`;
+  }
+
+  updateCounterAccumulator(stationId, featureId, property, rawValue) {
+    const key = this.counterAccumulatorKey(stationId, featureId, property);
+    const previousRaw = this.counterRawByKey.get(key);
+    this.counterRawByKey.set(key, rawValue);
+    if (previousRaw === undefined) return;
+
+    // a drop below the previous reading means the PLC counter reset to 0
+    const step = rawValue >= previousRaw ? rawValue - previousRaw : rawValue;
+    this.counterAccumByKey.set(key, (this.counterAccumByKey.get(key) || 0) + step);
+  }
+
+  updateCounterModeAccumulators(mapping, feature, valuesByNodeId) {
+    for (const property of ['parts_count', 'parts_rejected']) {
+      if ((feature.counterModes?.[property] || 'raw') !== 'delta') continue;
+      const rawValue = normalizeInt(this.getNodeValueForProperty(mapping, valuesByNodeId, property, feature), 0);
+      this.updateCounterAccumulator(mapping.stationId, feature.id, property, rawValue);
+    }
+  }
+
+  resetCounterModeAccumulators(mapping, feature) {
+    for (const property of ['parts_count', 'parts_rejected']) {
+      if ((feature.counterModes?.[property] || 'raw') !== 'delta') continue;
+      this.counterAccumByKey.set(this.counterAccumulatorKey(mapping.stationId, feature.id, property), 0);
+    }
+  }
+
+  resolveCounterValue(mapping, valuesByNodeId, property, feature) {
+    if ((feature?.counterModes?.[property] || 'raw') !== 'delta') {
+      return normalizeInt(this.getNodeValueForProperty(mapping, valuesByNodeId, property, feature), 0);
+    }
+
+    const key = this.counterAccumulatorKey(mapping.stationId, feature?.id || feature?.type || 'pieceCount', property);
+    return this.counterAccumByKey.get(key) || 0;
+  }
+
   buildOeePayload(mapping, valuesByNodeId, feature = null) {
     const context = mapping.context || {};
     const resolutionFromNodeOrDefault =
@@ -596,8 +646,8 @@ class BridgeRuntime {
       Line: String(context.Line ?? ''),
       Station: String(mapping.stationId),
       marcha: normalizeBoolean(this.getNodeValueForProperty(mapping, valuesByNodeId, 'marcha', feature)),
-      parts_count: normalizeInt(this.getNodeValueForProperty(mapping, valuesByNodeId, 'parts_count', feature), 0),
-      parts_rejected: normalizeInt(this.getNodeValueForProperty(mapping, valuesByNodeId, 'parts_rejected', feature), 0),
+      parts_count: this.resolveCounterValue(mapping, valuesByNodeId, 'parts_count', feature),
+      parts_rejected: this.resolveCounterValue(mapping, valuesByNodeId, 'parts_rejected', feature),
       T_stamp: toSqlDateTime(new Date()),
       Resolution: resolution,
     };
@@ -694,6 +744,10 @@ class BridgeRuntime {
     for (const feature of functionalities) {
       if (!feature.enabled) continue;
 
+      if (feature.type === 'pieceCount') {
+        this.updateCounterModeAccumulators(mapping, feature, valuesByNodeId);
+      }
+
       const byTrigger = this.shouldPublishByTriggerEvents(mapping, feature, valuesByNodeId);
       if (!byTrigger) continue;
 
@@ -702,6 +756,7 @@ class BridgeRuntime {
         if (this.shouldPublishOee(mapping, payload, feature)) {
           const topic = feature.topic || this.settings?.topics?.oee || 'optimotion/oee';
           this.publishJson(topic, payload);
+          this.resetCounterModeAccumulators(mapping, feature);
         }
         continue;
       }

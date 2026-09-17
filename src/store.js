@@ -175,6 +175,13 @@ function normalizeTriggerEvent(raw = {}, fallbackMode = 'always') {
   };
 }
 
+function normalizeCounterModes(raw = {}) {
+  return {
+    parts_count: raw?.parts_count === 'delta' ? 'delta' : 'raw',
+    parts_rejected: raw?.parts_rejected === 'delta' ? 'delta' : 'raw',
+  };
+}
+
 function normalizeFunctionalities(rawFunctionalities = [], legacy = {}) {
   const legacyNodes = legacy.nodes || {};
 
@@ -221,6 +228,7 @@ function normalizeFunctionalities(rawFunctionalities = [], legacy = {}) {
         onlyOnChange: Boolean(item.onlyOnChange),
         topic: String(item.topic || defaults.topic),
         triggers,
+        counterModes: normalizeCounterModes(item.counterModes),
         nodes: Object.keys(explicitNodes).length > 0 ? explicitNodes : backfilledNodes,
       };
     });
@@ -242,6 +250,7 @@ function normalizeFunctionalities(rawFunctionalities = [], legacy = {}) {
         triggerNodeId: oeeTrigger.triggerNodeId || '',
         intervalSeconds: oeeTrigger.intervalSeconds || 0,
       }, 'always')],
+      counterModes: normalizeCounterModes(legacy.counterModes),
       nodes: {
         marcha: String(legacyNodes.marcha || ''),
         parts_count: String(legacyNodes.parts_count || ''),
