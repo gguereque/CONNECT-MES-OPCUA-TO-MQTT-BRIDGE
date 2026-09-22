@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const signalResolver = require('./signal-resolver');
 
 const DEFAULT_TOPICS = {
   oee: 'optimotion/oee',
@@ -168,9 +169,18 @@ function normalizeTriggerEvent(raw = {}, fallbackMode = 'always') {
     ? raw.mode
     : fallbackMode;
 
+  // triggerNodeId puede ser un NodeId plano o, con Formula/Funcion avanzada,
+  // un objeto calculado ({type:'expression'|'function', ...}). Nunca debe
+  // forzarse con String() sobre un objeto (colapsaria a "[object Object]"
+  // al persistirse en mappings.json), igual que ya se respeta para nodes.<key>.
+  const rawTriggerNodeId = raw.triggerNodeId;
+  const triggerNodeId = signalResolver.isComputedConfig(rawTriggerNodeId)
+    ? rawTriggerNodeId
+    : String(rawTriggerNodeId || '').trim();
+
   return {
     mode,
-    triggerNodeId: String(raw.triggerNodeId || ''),
+    triggerNodeId,
     intervalSeconds: Number(raw.intervalSeconds ?? 0) || 0,
   };
 }

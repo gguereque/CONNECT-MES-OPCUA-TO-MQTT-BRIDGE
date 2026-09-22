@@ -499,6 +499,16 @@ label textarea {
   margin-top: 6px;
 }
 
+[data-trigger-value-editor="true"] {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe4ee;
+}
+
+[data-trigger-value-editor="true"] [data-signal-mode-body] {
+  margin-top: 6px;
+}
+
 .signal-alias-row {
   margin-bottom: 6px;
 }
@@ -997,6 +1007,10 @@ body[data-theme='dark'] .muted {
 
 body[data-theme='dark'] .expr-editor-highlight {
   color: #e5e7eb;
+}
+
+body[data-theme='dark'] [data-trigger-value-editor="true"] {
+  border-top-color: #374151;
 }
 
 body[data-theme='dark'] .expr-editor > textarea {

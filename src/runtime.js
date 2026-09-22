@@ -24,6 +24,11 @@ function normalizeBoolean(value) {
 }
 
 function normalizeInt(value, fallback = 0) {
+  // Un booleano (por ejemplo, el resultado de una propiedad tipo "expression"
+  // o "function" en modo Formula/Funcion avanzada) nunca debe pasar por
+  // Number.parseInt(): parseInt(true)/parseInt(false) dan NaN, lo que antes
+  // colapsaba SIEMPRE al valor de fallback sin importar el resultado real.
+  if (typeof value === 'boolean') return value ? 1 : 0;
   const n = Number.parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -33,6 +38,14 @@ function normalizeCounterModes(raw = {}) {
     parts_count: raw?.parts_count === 'delta' ? 'delta' : 'raw',
     parts_rejected: raw?.parts_rejected === 'delta' ? 'delta' : 'raw',
   };
+}
+
+function normalizeTriggerNodeId(raw) {
+  // Igual que con nodes.<property>: el valor "a vigilar" de un disparador puede
+  // ser un NodeId plano o, con Formula/Funcion avanzada, un objeto calculado
+  // ({type:'expression'|'function', ...}). Nunca debe forzarse con String()
+  // sobre un objeto (colapsaria a "[object Object]").
+  return signalResolver.isComputedConfig(raw) ? raw : String(raw || '').trim();
 }
 
 function sanitizeOpcNodeId(nodeId) {
@@ -430,12 +443,14 @@ class BridgeRuntime {
       ? `manual:${value.type}:${value.watch || JSON.stringify(value.inputs || {})}`
       : 'manual:simple';
 
+    let evalErrorMessage;
     const result = signalResolver.resolvePropertyValue({
       value,
       valuesByNodeId,
       stateKey,
       stateStore: this.manualEvaluateStateByKey,
       logger: (msg) => this.warn(`[evaluate:${stateKey}] ${msg}`),
+      onError: (msg) => { evalErrorMessage = msg; },
     });
 
     return {
@@ -443,6 +458,7 @@ class BridgeRuntime {
       nodeIds: [...nodeIds],
       valuesByNodeId,
       result,
+      error: evalErrorMessage,
     };
   }
 
@@ -486,7 +502,7 @@ class BridgeRuntime {
       const events = Array.isArray(feature.triggers) ? feature.triggers : [];
       for (const event of events) {
         if (event?.mode === 'onValueChanged' && event.triggerNodeId) {
-          nodeIds.add(event.triggerNodeId);
+          signalResolver.collectNodeIdsForPropertyValue(event.triggerNodeId, nodeIds);
         }
       }
     }
@@ -552,7 +568,7 @@ class BridgeRuntime {
             mode: ['always', 'onValueChanged', 'intervalSeconds'].includes(event?.mode)
               ? event.mode
               : 'always',
-            triggerNodeId: String(event?.triggerNodeId || ''),
+            triggerNodeId: normalizeTriggerNodeId(event?.triggerNodeId),
             intervalSeconds: Number(event?.intervalSeconds || 0) || 0,
           }))
           : [{ mode: 'always', triggerNodeId: '', intervalSeconds: 0 }],
@@ -578,7 +594,7 @@ class BridgeRuntime {
         },
         triggers: [{
           mode: oeeTrigger.mode || 'always',
-          triggerNodeId: String(oeeTrigger.triggerNodeId || ''),
+          triggerNodeId: normalizeTriggerNodeId(oeeTrigger.triggerNodeId),
           intervalSeconds: Number(oeeTrigger.intervalSeconds || 0) || 0,
         }],
       },
@@ -595,7 +611,7 @@ class BridgeRuntime {
         },
         triggers: [{
           mode: estopTrigger.mode || 'onValueChanged',
-          triggerNodeId: String(estopTrigger.triggerNodeId || ''),
+          triggerNodeId: normalizeTriggerNodeId(estopTrigger.triggerNodeId),
           intervalSeconds: Number(estopTrigger.intervalSeconds || 0) || 0,
         }],
       },
@@ -618,8 +634,26 @@ class BridgeRuntime {
     if (triggerMode !== 'onValueChanged') return true;
     if (!triggerNodeId) return false;
 
-    const key = `${stationId}:${streamName}:${triggerNodeId}`;
-    const currentValue = valuesByNodeId[triggerNodeId];
+    // triggerNodeId puede ser un NodeId plano o, con Formula/Funcion avanzada,
+    // un objeto calculado ({type:'expression'|'function', ...}). Se resuelve
+    // con el mismo mecanismo generico que cualquier otra propiedad de
+    // funcionalidad (signalResolver). La llave de cache/estado usa una
+    // representacion estable aunque sea un objeto: `${obj}` en un template
+    // literal daria "[object Object]" para CUALQUIER configuracion, lo que
+    // haria que dos disparadores por formula distintos compartieran la misma
+    // entrada de estado.
+    const triggerKeyPart = signalResolver.isComputedConfig(triggerNodeId)
+      ? JSON.stringify(triggerNodeId)
+      : String(triggerNodeId);
+    const key = `${stationId}:${streamName}:${triggerKeyPart}`;
+
+    const currentValue = signalResolver.resolvePropertyValue({
+      value: triggerNodeId,
+      valuesByNodeId,
+      stateKey: `trigger:${key}`,
+      stateStore: this.activityStateByKey,
+      logger: (msg) => this.warn(`[trigger:${key}] ${msg}`),
+    });
     const previousValue = this.lastNodeValues.get(key);
     this.lastNodeValues.set(key, currentValue);
 

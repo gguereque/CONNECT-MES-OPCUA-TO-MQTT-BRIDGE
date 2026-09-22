@@ -1131,19 +1131,52 @@ function setSelectValueWithFallback(selectEl, preferredValue, fallbackValue = ''
   selectEl.value = hasFallback ? fallback : (selectEl.options[0]?.value || '');
 }
 
-function getStationFacilityValue(station) {
+// --- IDs y nombres para Facility/Area/Linea ---
+//
+// getStation*Id se usa para el "value" de los <option>, para filtrar la
+// jerarquia Facility->Area->Linea->Estacion, Y TAMBIEN para el contexto que
+// se guarda/publica por MQTT (facilities/Area/Line): el sistema de ingestion
+// del cliente (CONNECT-MES en este caso) todavia no procesa por nombre, asi
+// que Area y Linea se publican como su ID numerico, igual que ya se hacia
+// con facilities y con la estacion (Station/ID).
+//
+// getStation*Label es SOLO para el texto visible del <option> en pantalla
+// (ej. "Ensambles") -- nunca se usa para lo que se publica.
+function getStationFacilityId(station) {
   if (!station) return '';
   return String(station.facilitiesID ?? station.facilityId ?? station.facilityID ?? '').trim();
 }
 
-function getStationAreaValue(station) {
+function getStationAreaId(station) {
   if (!station) return '';
-  return String(station.Area ?? station.AreaID ?? station.area ?? station.areaId ?? '').trim();
+  return String(station.AreaID ?? station.areaId ?? '').trim();
 }
 
-function getStationLineValue(station) {
+function getStationLineId(station) {
   if (!station) return '';
-  return String(station.Line ?? station.LineID ?? station.line ?? station.lineId ?? '').trim();
+  return String(station.LineID ?? station.lineId ?? '').trim();
+}
+
+function getStationFacilityLabel(station) {
+  if (!station) return '';
+  // ConnectMES todavia no manda un nombre de facility en
+  // /api/connectmes/stations (solo facilitiesID). Se dejan varios nombres de
+  // campo candidatos por si se agrega mas adelante; mientras tanto se
+  // muestra el ID como texto (igual que antes).
+  const name = String(
+    station.facilityName ?? station.FacilityName ?? station.facilitiesName ?? station.facility ?? ''
+  ).trim();
+  return name || getStationFacilityId(station);
+}
+
+function getStationAreaLabel(station) {
+  if (!station) return '';
+  return String(station.Area ?? station.area ?? '').trim() || getStationAreaId(station);
+}
+
+function getStationLineLabel(station) {
+  if (!station) return '';
+  return String(station.Line ?? station.line ?? '').trim() || getStationLineId(station);
 }
 
 function normalizeOpcAuthType(rawAuthType, username = '') {
@@ -1532,27 +1565,32 @@ async function loadConnectMesStations() {
 }
 
 function buildStationHierarchy() {
+  // facilities: Map(facilityId -> facilityLabel)
+  // areasByFacility: Map(facilityId -> Map(areaId -> areaLabel))
+  // linesByFacilityArea: Map("facilityId|areaId" -> Map(lineId -> lineLabel))
   const facilities = new Map();
   const areasByFacility = new Map();
   const linesByFacilityArea = new Map();
 
   for (const station of appState.stations) {
-    const facility = getStationFacilityValue(station);
-    const area = getStationAreaValue(station);
-    const line = getStationLineValue(station);
+    const facilityId = getStationFacilityId(station);
+    const areaId = getStationAreaId(station);
+    const lineId = getStationLineId(station);
 
-    if (facility && !facilities.has(facility)) facilities.set(facility, facility);
-
-    if (facility && area) {
-      const areas = areasByFacility.get(facility) || new Set();
-      areas.add(area);
-      areasByFacility.set(facility, areas);
+    if (facilityId && !facilities.has(facilityId)) {
+      facilities.set(facilityId, getStationFacilityLabel(station));
     }
 
-    if (facility && area && line) {
-      const key = `${facility}|${area}`;
-      const lines = linesByFacilityArea.get(key) || new Set();
-      lines.add(line);
+    if (facilityId && areaId) {
+      const areas = areasByFacility.get(facilityId) || new Map();
+      areas.set(areaId, getStationAreaLabel(station));
+      areasByFacility.set(facilityId, areas);
+    }
+
+    if (facilityId && areaId && lineId) {
+      const key = `${facilityId}|${areaId}`;
+      const lines = linesByFacilityArea.get(key) || new Map();
+      lines.set(lineId, getStationLineLabel(station));
       linesByFacilityArea.set(key, lines);
     }
   }
@@ -1560,40 +1598,42 @@ function buildStationHierarchy() {
   return { facilities, areasByFacility, linesByFacilityArea };
 }
 
-function fillSelectOptions(selectEl, values, placeholderKey) {
-  const sortedValues = [...values].map((value) => String(value)).sort((a, b) => a.localeCompare(b));
+function fillSelectOptions(selectEl, entries, placeholderKey) {
+  // `entries` es un Map (o cualquier iterable de pares [id, label]) -- el
+  // value del <option> es el id, el texto visible es el label (nombre).
+  const sortedEntries = [...entries].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
   const options = [`<option value="">${escapeHtml(t(placeholderKey))}</option>`];
-  for (const value of sortedValues) {
-    options.push(`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
+  for (const [id, label] of sortedEntries) {
+    options.push(`<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`);
   }
   selectEl.innerHTML = options.join('');
 }
 
 function populateFacilitySelect(selectEl, selectedFacility = '') {
   const hierarchy = buildStationHierarchy();
-  fillSelectOptions(selectEl, hierarchy.facilities.keys(), 'mappings.selectFacility');
+  fillSelectOptions(selectEl, hierarchy.facilities, 'mappings.selectFacility');
   setSelectValueWithFallback(selectEl, selectedFacility, '');
 }
 
 function populateAreaSelect(selectEl, facilityValue = '', selectedArea = '') {
   const hierarchy = buildStationHierarchy();
-  const areas = hierarchy.areasByFacility.get(String(facilityValue || '')) || new Set();
-  fillSelectOptions(selectEl, areas.values(), 'mappings.selectArea');
+  const areas = hierarchy.areasByFacility.get(String(facilityValue || '')) || new Map();
+  fillSelectOptions(selectEl, areas, 'mappings.selectArea');
   setSelectValueWithFallback(selectEl, selectedArea, '');
 }
 
 function populateLineSelect(selectEl, facilityValue = '', areaValue = '', selectedLine = '') {
   const hierarchy = buildStationHierarchy();
-  const lines = hierarchy.linesByFacilityArea.get(`${facilityValue}|${areaValue}`) || new Set();
-  fillSelectOptions(selectEl, lines.values(), 'mappings.selectLine');
+  const lines = hierarchy.linesByFacilityArea.get(`${facilityValue}|${areaValue}`) || new Map();
+  fillSelectOptions(selectEl, lines, 'mappings.selectLine');
   setSelectValueWithFallback(selectEl, selectedLine, '');
 }
 
 function getFilteredStations({ facility = '', area = '', line = '' } = {}) {
   return appState.stations.filter((station) => {
-    if (facility && getStationFacilityValue(station) !== String(facility)) return false;
-    if (area && getStationAreaValue(station) !== String(area)) return false;
-    if (line && getStationLineValue(station) !== String(line)) return false;
+    if (facility && getStationFacilityId(station) !== String(facility)) return false;
+    if (area && getStationAreaId(station) !== String(area)) return false;
+    if (line && getStationLineId(station) !== String(line)) return false;
     return true;
   });
 }
@@ -1628,18 +1668,23 @@ function syncContextFromStation(row) {
   const station = appState.stationsById.get(String(stationSelect.value || ''));
 
   if (station) {
-    const facility = getStationFacilityValue(station);
-    const area = getStationAreaValue(station);
-    const line = getStationLineValue(station);
+    const facilityId = getStationFacilityId(station);
+    const areaId = getStationAreaId(station);
+    const lineId = getStationLineId(station);
 
-    setSelectValueWithFallback(facilitySelect, facility, '');
-    populateAreaSelect(areaSelect, facility, area);
-    populateLineSelect(lineSelect, facility, area, line);
+    setSelectValueWithFallback(facilitySelect, facilityId, '');
+    populateAreaSelect(areaSelect, facilityId, areaId);
+    populateLineSelect(lineSelect, facilityId, areaId, lineId);
   }
 
-  const facilityValue = station ? getStationFacilityValue(station) : String(facilitySelect?.value || '');
-  const areaValue = station ? getStationAreaValue(station) : String(areaSelect?.value || '');
-  const lineValue = station ? getStationLineValue(station) : String(lineSelect?.value || '');
+  // dataset.facilities/area/line son el respaldo que usa
+  // resolveContextFromRow() para armar el contexto que se publica por MQTT.
+  // Los 3 son el ID numerico (facilities ya lo era; Area/Line tambien ahora,
+  // porque el sistema de ingestion del cliente todavia no procesa por
+  // nombre).
+  const facilityValue = station ? getStationFacilityId(station) : String(facilitySelect?.value || '');
+  const areaValue = station ? getStationAreaId(station) : String(areaSelect?.value || '');
+  const lineValue = station ? getStationLineId(station) : String(lineSelect?.value || '');
 
   row.dataset.facilities = facilityValue;
   row.dataset.area = areaValue;
@@ -1712,9 +1757,18 @@ function normalizeTriggerEvent(input = {}, fallbackMode = 'always') {
     ? input.mode
     : fallbackMode;
 
+  // triggerNodeId puede ser un NodeId plano (string) o, con Formula/Funcion
+  // avanzada, un objeto computado ({type:'expression'|'function', ...}). No
+  // debe forzarse nunca a String() sobre un objeto (colapsaria a
+  // "[object Object]"), igual que ya se maneja en normalizeFunctionalityNodes.
+  const rawTriggerNodeId = input.triggerNodeId;
+  const triggerNodeId = isComputedNodeConfig(rawTriggerNodeId)
+    ? rawTriggerNodeId
+    : String(rawTriggerNodeId || '').trim();
+
   return {
     mode,
-    triggerNodeId: String(input.triggerNodeId || '').trim(),
+    triggerNodeId,
     intervalSeconds: Number.parseInt(String(input.intervalSeconds || '0'), 10) || 0,
   };
 }
@@ -2159,6 +2213,27 @@ function createTriggerEventNode(event = normalizeTriggerEvent(), index = 0) {
   const node = document.createElement('div');
   node.className = 'trigger-event-item is-collapsed';
   node.dataset.triggerIndex = String(index);
+
+  // El "valor a vigilar" de un disparador acepta las mismas 3 modalidades que
+  // una propiedad de funcionalidad, MENOS "Inferir por inactividad" (no tiene
+  // sentido usar esa inferencia para decidir CUANDO publicar).
+  const watchedMode = getSignalFieldMode(event.triggerNodeId);
+  const simpleTriggerValue = watchedMode === 'simple' ? String(event.triggerNodeId || '').trim() : '';
+  const triggerExpressionConfig = watchedMode === 'expression' ? event.triggerNodeId : {};
+  const triggerFunctionConfig = watchedMode === 'function' ? event.triggerNodeId : {};
+
+  const triggerModeOptionsHtml = ['simple', 'expression', 'function'].map((optionId) => {
+    const labelKey = `mappings.signalMode.${optionId}`;
+    return `<option value="${optionId}" ${watchedMode === optionId ? 'selected' : ''} data-i18n="${labelKey}">${escapeHtml(t(labelKey))}</option>`;
+  }).join('');
+
+  const triggerTestNowHtml = `
+    <div class="actions">
+      <button class="btn btn-secondary" type="button" data-action="test-trigger-value" data-i18n="mappings.testNow">${escapeHtml(t('mappings.testNow'))}</button>
+    </div>
+    <pre class="status-box browser-value signal-test-output" data-signal-test-output="true" hidden></pre>
+  `;
+
   node.innerHTML = `
     <div class="feature-block-head trigger-head">
       <strong>Evento ${index + 1}</strong>
@@ -2174,13 +2249,44 @@ function createTriggerEventNode(event = normalizeTriggerEvent(), index = 0) {
           </select>
         </label>
         <label data-trigger-scope="onValueChanged"><span data-i18n="mappings.triggerProperty">Propiedad para cambio de valor</span>
-          <span class="input-picker"><input data-trigger-field="triggerNodeId" type="text" value="${escapeHtml(event.triggerNodeId || '')}" placeholder="ns=3;s=Device.Trigger01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+          <select data-trigger-mode-select="true">${triggerModeOptionsHtml}</select>
         </label>
         <label data-trigger-scope="intervalSeconds"><span data-i18n="mappings.triggerSeconds">Segundos</span>
           <input data-trigger-field="intervalSeconds" type="number" min="1" step="1" value="${escapeHtml(event.intervalSeconds > 0 ? String(event.intervalSeconds) : '')}" placeholder="1" />
         </label>
         <div class="actions">
           <button class="btn btn-danger" type="button" data-action="remove-trigger-event" data-i18n="mappings.removeTrigger">Eliminar evento</button>
+        </div>
+      </div>
+
+      <div data-trigger-scope="onValueChanged" data-trigger-value-editor="true">
+        <div data-signal-mode-body="simple" ${watchedMode === 'simple' ? '' : 'hidden'}>
+          <span class="input-picker"><input data-trigger-field="triggerNodeId" type="text" value="${escapeHtml(simpleTriggerValue)}" placeholder="ns=3;s=Device.Trigger01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+        </div>
+
+        <div data-signal-mode-body="expression" ${watchedMode === 'expression' ? '' : 'hidden'}>
+          <div data-alias-list="true">${renderSignalAliasRowsHtml(triggerExpressionConfig.inputs)}</div>
+          <div class="actions"><button class="btn btn-secondary" type="button" data-action="add-signal-alias" data-i18n="mappings.addAlias">${escapeHtml(t('mappings.addAlias'))}</button></div>
+          <label><span data-i18n="mappings.expressionFormula">${escapeHtml(t('mappings.expressionFormula'))}</span>
+            <div class="expr-editor" data-expr-editor="true">
+              <pre class="expr-editor-highlight" data-expr-highlight="true" aria-hidden="true">${renderExpressionHighlightHtml(String(triggerExpressionConfig.expression || ''), Object.keys(triggerExpressionConfig.inputs || {}))}</pre>
+              <textarea data-signal-expression="true" rows="2" spellcheck="false" placeholder="marcha == 1 and paro == 0">${escapeHtml(String(triggerExpressionConfig.expression || ''))}</textarea>
+            </div>
+          </label>
+          ${triggerTestNowHtml}
+        </div>
+
+        <div data-signal-mode-body="function" ${watchedMode === 'function' ? '' : 'hidden'}>
+          <p class="muted" data-i18n="mappings.advancedWarning">${escapeHtml(t('mappings.advancedWarning'))}</p>
+          <div data-alias-list="true">${renderSignalAliasRowsHtml(triggerFunctionConfig.inputs)}</div>
+          <div class="actions"><button class="btn btn-secondary" type="button" data-action="add-signal-alias" data-i18n="mappings.addAlias">${escapeHtml(t('mappings.addAlias'))}</button></div>
+          <label><span data-i18n="mappings.advancedCode">${escapeHtml(t('mappings.advancedCode'))}</span>
+            <div class="expr-editor" data-expr-editor="true">
+              <pre class="expr-editor-highlight" data-code-highlight="true" aria-hidden="true">${renderCodeHighlightHtml(String(triggerFunctionConfig.code || ''), Object.keys(triggerFunctionConfig.inputs || {}))}</pre>
+              <textarea data-signal-code="true" rows="4" spellcheck="false" placeholder="return inputs.arr.filter(x => x === 3).length;">${escapeHtml(String(triggerFunctionConfig.code || ''))}</textarea>
+            </div>
+          </label>
+          ${triggerTestNowHtml}
         </div>
       </div>
     </div>
@@ -2357,11 +2463,70 @@ function addSignalAliasRow(container) {
   container.appendChild(wrapper);
 }
 
+function readTriggerWatchedValue(triggerRow) {
+  const editor = triggerRow.querySelector('[data-trigger-value-editor="true"]');
+  // OJO: el <select data-trigger-mode-select="true"> vive en el .grid.four
+  // (junto a "Tipo de disparo"), NO dentro de data-trigger-value-editor (ese
+  // solo contiene los 3 cuerpos simple/expression/function). Por eso se busca
+  // en triggerRow completo y no en editor.
+  const mode = String(triggerRow.querySelector('[data-trigger-mode-select="true"]')?.value || 'simple');
+
+  if (mode === 'expression') {
+    const body = editor.querySelector('[data-signal-mode-body="expression"]');
+    const inputs = readSignalAliasesFromContainer(body);
+    const expression = String(body?.querySelector('[data-signal-expression="true"]')?.value || '').trim();
+    return expression ? { type: 'expression', inputs, expression } : '';
+  }
+
+  if (mode === 'function') {
+    const body = editor.querySelector('[data-signal-mode-body="function"]');
+    const inputs = readSignalAliasesFromContainer(body);
+    const code = String(body?.querySelector('[data-signal-code="true"]')?.value || '');
+    return code.trim() ? { type: 'function', inputs, code } : '';
+  }
+
+  return String(triggerRow.querySelector('[data-trigger-field="triggerNodeId"]')?.value || '').trim();
+}
+
+async function testTriggerValueNow(triggerRow, outputBox, row) {
+  const value = readTriggerWatchedValue(triggerRow);
+  const isEmpty = typeof value === 'string' ? !value.trim() : !(value && typeof value === 'object');
+  if (isEmpty) {
+    throw new Error(t('mappings.testNowEmpty'));
+  }
+
+  const serverId = String(row?.querySelector('[data-field="opcServerId"]')?.value || '').trim();
+
+  if (outputBox) {
+    outputBox.hidden = false;
+    outputBox.textContent = t('mappings.testNowRunning');
+  }
+
+  try {
+    const data = await apiFetch('/api/opc/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ serverId, value }),
+    });
+
+    if (outputBox) {
+      const output = { valores: data.valuesByNodeId, resultado: data.result };
+      if (data.error) output.error = data.error;
+      outputBox.textContent = JSON.stringify(output, null, 2);
+    }
+    showMessage(t('mappings.testNowDone'));
+  } catch (error) {
+    if (outputBox) {
+      outputBox.textContent = `${t('mappings.testNowError')}: ${error.message}`;
+    }
+    throw error;
+  }
+}
+
 function readTriggerEventsFromFunctionality(featureNode) {
   const triggerRows = [...featureNode.querySelectorAll('.trigger-event-item')];
   const events = triggerRows.map((triggerRow) => normalizeTriggerEvent({
     mode: triggerRow.querySelector('[data-trigger-field="mode"]')?.value || 'always',
-    triggerNodeId: triggerRow.querySelector('[data-trigger-field="triggerNodeId"]')?.value || '',
+    triggerNodeId: readTriggerWatchedValue(triggerRow),
     intervalSeconds: triggerRow.querySelector('[data-trigger-field="intervalSeconds"]')?.value || 0,
   }));
 
@@ -2453,7 +2618,9 @@ async function testSignalFieldNow(fieldNode, outputBox, row) {
     });
 
     if (outputBox) {
-      outputBox.textContent = JSON.stringify({ valores: data.valuesByNodeId, resultado: data.result }, null, 2);
+      const output = { valores: data.valuesByNodeId, resultado: data.result };
+      if (data.error) output.error = data.error;
+      outputBox.textContent = JSON.stringify(output, null, 2);
     }
     showMessage(t('mappings.testNowDone'));
   } catch (error) {
@@ -2540,11 +2707,15 @@ function resolveContextFromRow(row) {
   const stationId = String(row.querySelector('[data-field="stationId"]')?.value || '');
   const station = appState.stationsById.get(stationId);
 
+  // facilities/Area/Line se publican como ID numerico (string), NO como
+  // nombre: el sistema de ingestion del cliente todavia no procesa por
+  // nombre. facilities y Station/ID ya se publicaban asi desde antes; Area y
+  // Line ahora tambien.
   if (station) {
     return {
-      facilities: getStationFacilityValue(station),
-      Area: getStationAreaValue(station),
-      Line: getStationLineValue(station),
+      facilities: getStationFacilityId(station),
+      Area: getStationAreaId(station),
+      Line: getStationLineId(station),
     };
   }
 
@@ -2680,14 +2851,21 @@ function createMappingNode(mapping = null) {
   const opcServerSelect = row.querySelector('[data-field="opcServerId"]');
 
   const selectedStation = appState.stationsById.get(String(mapping?.stationId || ''));
+  // Cuando la estacion guardada ya se puede resolver contra la lista viva de
+  // ConnectMES, se usan los IDs (para que coincidan con el value de los
+  // <option>, ya que ahora son numericos). Si NO se puede resolver todavia
+  // (caso raro/degradado: la estacion ya no existe o aun no cargan las
+  // estaciones), se cae de vuelta al contexto guardado -- que trae el NOMBRE
+  // de Area/Linea (no el ID), asi que en ese caso el selector podria no
+  // preseleccionar nada hasta que la estacion se pueda resolver de nuevo.
   const initialFacility = selectedStation
-    ? getStationFacilityValue(selectedStation)
+    ? getStationFacilityId(selectedStation)
     : String(mapping?.context?.facilities || '');
   const initialArea = selectedStation
-    ? getStationAreaValue(selectedStation)
+    ? getStationAreaId(selectedStation)
     : String(mapping?.context?.Area || '');
   const initialLine = selectedStation
-    ? getStationLineValue(selectedStation)
+    ? getStationLineId(selectedStation)
     : String(mapping?.context?.Line || '');
 
   populateFacilitySelect(facilitySelect, initialFacility);
@@ -2831,6 +3009,15 @@ function createMappingNode(mapping = null) {
       return;
     }
 
+    if (actionButton.dataset.action === 'test-trigger-value') {
+      const triggerRow = actionButton.closest('.trigger-event-item');
+      const outputBox = actionButton.closest('[data-signal-mode-body]')?.querySelector('[data-signal-test-output="true"]');
+      if (triggerRow) {
+        testTriggerValueNow(triggerRow, outputBox, row).catch((error) => showMessage(error.message, true));
+      }
+      return;
+    }
+
     if (actionButton.dataset.action === 'remove-trigger-event') {
       const triggerNode = actionButton.closest('.trigger-event-item');
       const triggersList = actionButton.closest('[data-functionality-field="triggers-list"]');
@@ -2863,6 +3050,17 @@ function createMappingNode(mapping = null) {
       const triggerNode = target.closest('.trigger-event-item');
       if (triggerNode) updateTriggerEventScope(triggerNode);
       updateResolutionFromFunctionalities(row);
+      return;
+    }
+
+    if (target.matches('[data-trigger-mode-select="true"]')) {
+      const editor = target.closest('.trigger-event-item')?.querySelector('[data-trigger-value-editor="true"]');
+      if (editor) {
+        const selectedMode = String(target.value || 'simple');
+        editor.querySelectorAll('[data-signal-mode-body]').forEach((body) => {
+          body.hidden = body.getAttribute('data-signal-mode-body') !== selectedMode;
+        });
+      }
       return;
     }
 

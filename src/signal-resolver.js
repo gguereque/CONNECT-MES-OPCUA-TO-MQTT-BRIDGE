@@ -77,7 +77,7 @@ function buildInputsScope(inputsMap, valuesByNodeId) {
   return scope;
 }
 
-function evaluateExpression(config, valuesByNodeId, logger) {
+function evaluateExpression(config, valuesByNodeId, logger, onError) {
   const expressionText = String(config.expression || '').trim();
   if (!expressionText) return undefined;
 
@@ -88,6 +88,7 @@ function evaluateExpression(config, valuesByNodeId, logger) {
     return expr.evaluate(scope);
   } catch (err) {
     if (logger) logger(`Expresión inválida "${expressionText}": ${err.message}`);
+    if (onError) onError(err.message);
     return undefined;
   }
 }
@@ -123,7 +124,7 @@ function evaluateActivityTimeout(config, valuesByNodeId, now, stateKey, stateSto
  * Cualquier excepción o timeout se captura y regresa `undefined` (esa propiedad
  * simplemente no se publica ese ciclo, nunca debe tumbar el loop de poll).
  */
-function evaluateFunction(config, valuesByNodeId, logger) {
+function evaluateFunction(config, valuesByNodeId, logger, onError) {
   const code = String(config.code || '');
   if (!code.trim()) return undefined;
 
@@ -139,6 +140,7 @@ function evaluateFunction(config, valuesByNodeId, logger) {
     return sandbox.__result;
   } catch (err) {
     if (logger) logger(`Función avanzada falló: ${err.message}`);
+    if (onError) onError(err.message);
     return undefined;
   }
 }
@@ -147,7 +149,7 @@ function evaluateFunction(config, valuesByNodeId, logger) {
  * Punto de entrada único: resuelve el valor final de una propiedad, sin importar
  * si viene de un NodeId directo o de una de las 3 configuraciones calculadas.
  */
-function resolvePropertyValue({ value, valuesByNodeId, now = Date.now(), stateKey, stateStore, logger }) {
+function resolvePropertyValue({ value, valuesByNodeId, now = Date.now(), stateKey, stateStore, logger, onError }) {
   if (value == null) return undefined;
 
   if (isPlainNodeId(value)) {
@@ -160,11 +162,11 @@ function resolvePropertyValue({ value, valuesByNodeId, now = Date.now(), stateKe
 
   switch (value.type.trim()) {
     case 'expression':
-      return evaluateExpression(value, valuesByNodeId, logger);
+      return evaluateExpression(value, valuesByNodeId, logger, onError);
     case 'activityTimeout':
       return evaluateActivityTimeout(value, valuesByNodeId, now, stateKey, stateStore);
     case 'function':
-      return evaluateFunction(value, valuesByNodeId, logger);
+      return evaluateFunction(value, valuesByNodeId, logger, onError);
     default:
       return undefined;
   }
