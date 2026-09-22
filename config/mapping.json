@@ -27,8 +27,16 @@
             }
           ],
           "nodes": {
-            "marcha": "ns=3;s=Machine125.Run",
-            "parts_count": "ns=3;s=Machine125.PartsCount",
+            "marcha": {
+              "type": "expression",
+              "inputs": {},
+              "expression": "marcha == 1 and (todo == 1 or nada == 0)"
+            },
+            "parts_count": {
+              "type": "function",
+              "inputs": {},
+              "code": "return input.length()"
+            },
             "parts_rejected": "ns=3;s=Machine125.PartsRejected",
             "Resolution": "ns=3;s=Machine125.Resolution"
           },
@@ -81,8 +89,8 @@
         }
       },
       "nodes": {
-        "marcha": "ns=3;s=Machine125.Run",
-        "parts_count": "ns=3;s=Machine125.PartsCount",
+        "marcha": "[object Object]",
+        "parts_count": "[object Object]",
         "parts_rejected": "ns=3;s=Machine125.PartsRejected",
         "Resolution": "ns=3;s=Machine125.Resolution",
         "estop_status": "ns=3;s=Machine125.EstopStatus",

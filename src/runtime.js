@@ -1,5 +1,6 @@
 const mqtt = require('mqtt');
 const { OpcConnectionManager } = require('./opc-connection-manager');
+const signalResolver = require('./signal-resolver');
 const {
   AttributeIds,
   NodeClass,
@@ -85,6 +86,8 @@ class BridgeRuntime {
     this.lastCustomSignatureByStation = new Map();
     this.counterRawByKey = new Map();
     this.counterAccumByKey = new Map();
+    this.activityStateByKey = new Map();
+    this.manualEvaluateStateByKey = new Map();
   }
 
   info(...args) {
@@ -394,6 +397,55 @@ class BridgeRuntime {
     });
   }
 
+  async evaluatePropertyValue(value, serverId = '') {
+    const nodeIds = new Set();
+    signalResolver.collectNodeIdsForPropertyValue(value, nodeIds);
+
+    const nodesToRead = [...nodeIds].map((nodeId) => ({
+      nodeId: sanitizeOpcNodeId(nodeId),
+      attributeId: AttributeIds.Value,
+    }));
+
+    const valuesByNodeId = {};
+    let resolvedServerId = serverId || this.getDefaultOpcServerId();
+
+    if (nodesToRead.length > 0) {
+      await this.withOpcSession(serverId, async (session, sessionServerId) => {
+        resolvedServerId = sessionServerId;
+        const dataValues = await session.read(nodesToRead, 0);
+        nodesToRead.forEach((item, idx) => {
+          const dataValue = dataValues?.[idx];
+          valuesByNodeId[item.nodeId] = dataValue && !dataValue.statusCode?.isNotGood?.()
+            ? dataValue.value?.value
+            : undefined;
+        });
+      });
+    }
+
+    // Clave de estado propia para "Probar ahora": aislada del estado real de
+    // las estaciones (activityStateByKey) y estable por configuracion, para
+    // que probar el mismo campo dos veces seguidas si permita observar un
+    // cambio real de activityTimeout entre una llamada y la siguiente.
+    const stateKey = signalResolver.isComputedConfig(value)
+      ? `manual:${value.type}:${value.watch || JSON.stringify(value.inputs || {})}`
+      : 'manual:simple';
+
+    const result = signalResolver.resolvePropertyValue({
+      value,
+      valuesByNodeId,
+      stateKey,
+      stateStore: this.manualEvaluateStateByKey,
+      logger: (msg) => this.warn(`[evaluate:${stateKey}] ${msg}`),
+    });
+
+    return {
+      serverId: resolvedServerId,
+      nodeIds: [...nodeIds],
+      valuesByNodeId,
+      result,
+    };
+  }
+
   async browseNode(nodeId = 'RootFolder', serverId = '') {
     const targetNodeId = sanitizeOpcNodeId(nodeId);
 
@@ -427,8 +479,8 @@ class BridgeRuntime {
 
     const functionalities = this.getFunctionalities(mapping);
     for (const feature of functionalities) {
-      for (const nodeId of Object.values(feature.nodes || {})) {
-        if (nodeId) nodeIds.add(nodeId);
+      for (const propertyValue of Object.values(feature.nodes || {})) {
+        signalResolver.collectNodeIdsForPropertyValue(propertyValue, nodeIds);
       }
 
       const events = Array.isArray(feature.triggers) ? feature.triggers : [];
@@ -469,9 +521,17 @@ class BridgeRuntime {
   }
 
   getNodeValueForProperty(mapping, valuesByNodeId, property, feature = null) {
-    const nodeId = feature?.nodes?.[property] || mapping.nodes?.[property];
-    if (!nodeId) return undefined;
-    return valuesByNodeId[nodeId];
+    const propertyValue = feature?.nodes?.[property] ?? mapping.nodes?.[property];
+    if (propertyValue == null || propertyValue === '') return undefined;
+
+    const stateKey = `${mapping.stationId}:${feature?.id || feature?.type || 'legacy'}:${property}`;
+    return signalResolver.resolvePropertyValue({
+      value: propertyValue,
+      valuesByNodeId,
+      stateKey,
+      stateStore: this.activityStateByKey,
+      logger: (msg) => this.warn(`[signal:${stateKey}] ${msg}`),
+    });
   }
 
   getFunctionalities(mapping) {

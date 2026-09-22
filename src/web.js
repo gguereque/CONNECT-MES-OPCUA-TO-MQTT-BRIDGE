@@ -516,6 +516,22 @@ function createWebApp({ store, runtime }) {
     }
   });
 
+  app.post('/api/opc/evaluate', async (req, res) => {
+    try {
+      const serverId = String(req.body?.serverId || '').trim();
+      const value = req.body?.value;
+
+      if (value == null || value === '') {
+        return res.status(400).json({ ok: false, error: 'value is required' });
+      }
+
+      const result = await runtime.evaluatePropertyValue(value, serverId);
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+  });
+
   app.get('/api/connectmes/stations', async (req, res) => {
     try {
       const fallbackToken = getStoredConnectMesToken(store);

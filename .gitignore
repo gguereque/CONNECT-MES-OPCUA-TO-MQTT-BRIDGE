@@ -6,3 +6,6 @@ installer/output/
 data/bridge.db
 certs/
 data/certs/
+
+# Documentacion/PDFs del cliente (ARBURG, etc.) - no debe ir al repo
+informacion cliente/

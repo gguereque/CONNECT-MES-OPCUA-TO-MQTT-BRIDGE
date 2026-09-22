@@ -276,13 +276,71 @@ label {
 }
 
 label input,
-label select {
+label select,
+label textarea {
   padding: 9px 10px;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   font-size: 13px;
   background: #fff;
 }
+
+label textarea {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* Editor de formula con resaltado de sintaxis: el <pre> de abajo muestra los
+   tokens coloreados, el <textarea> de encima queda con texto transparente y
+   solo se ve el cursor (caret-color), asi el usuario sigue escribiendo en un
+   textarea real (selecciona, copia, pega, etc. como siempre). */
+.expr-editor {
+  position: relative;
+}
+
+.expr-editor-highlight,
+.expr-editor > textarea {
+  margin: 0;
+  padding: 9px 10px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  border-radius: 8px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.expr-editor-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border: 1px solid transparent;
+  color: #1f2937;
+  background: transparent;
+}
+
+.expr-editor > textarea {
+  position: relative;
+  display: block;
+  background: transparent;
+  color: transparent;
+  caret-color: #1f2937;
+  border: 1px solid #cbd5e1;
+}
+
+.expr-tok-keyword { color: #7c3aed; font-weight: 700; }
+.expr-tok-op { color: #b45309; font-weight: 600; }
+.expr-tok-number { color: #0f766e; }
+.expr-tok-alias { color: #1d4ed8; font-weight: 700; }
+.expr-tok-unknown { text-decoration: underline dotted #94a3b8; text-underline-offset: 2px; }
+.expr-tok-string { color: #15803d; }
+.expr-tok-comment { color: #64748b; font-style: italic; }
+.expr-tok-context { color: #0e7490; font-weight: 700; }
 
 .checkbox {
   flex-direction: row-reverse;
@@ -408,6 +466,41 @@ label select {
 .mapping-functionality-card.is-collapsed [data-feature-collapsible-body="true"],
 .trigger-event-item.is-collapsed [data-trigger-collapsible-body="true"] {
   display: none;
+}
+
+.signal-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.signal-field {
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f9fcff;
+}
+
+.signal-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.signal-field-head > span {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.signal-field [data-signal-mode-body] {
+  margin-top: 6px;
+}
+
+.signal-alias-row {
+  margin-bottom: 6px;
 }
 
 .muted {
@@ -882,22 +975,45 @@ body[data-theme='dark'] .topbar-user-pill,
 body[data-theme='dark'] .topbar-mini-btn,
 body[data-theme='dark'] label input,
 body[data-theme='dark'] label select,
+body[data-theme='dark'] label textarea,
 body[data-theme='dark'] .checkbox,
 body[data-theme='dark'] .tab-btn,
 body[data-theme='dark'] .mapping-item,
 body[data-theme='dark'] .mapping-functionality-card,
 body[data-theme='dark'] .trigger-event-item,
 body[data-theme='dark'] .browser-row,
-body[data-theme='dark'] .modal-panel {
+body[data-theme='dark'] .modal-panel,
+body[data-theme='dark'] .signal-field {
   background: #1f2937;
   border-color: #374151;
   color: #e5e7eb;
 }
 
 body[data-theme='dark'] .feature-block-head strong,
+body[data-theme='dark'] .signal-field-head > span,
 body[data-theme='dark'] .muted {
   color: #d1d5db;
 }
+
+body[data-theme='dark'] .expr-editor-highlight {
+  color: #e5e7eb;
+}
+
+body[data-theme='dark'] .expr-editor > textarea {
+  background: transparent;
+  color: transparent;
+  caret-color: #e5e7eb;
+  border-color: #374151;
+}
+
+body[data-theme='dark'] .expr-tok-keyword { color: #c4b5fd; }
+body[data-theme='dark'] .expr-tok-op { color: #fbbf24; }
+body[data-theme='dark'] .expr-tok-number { color: #5eead4; }
+body[data-theme='dark'] .expr-tok-alias { color: #93c5fd; }
+body[data-theme='dark'] .expr-tok-unknown { text-decoration-color: #6b7280; }
+body[data-theme='dark'] .expr-tok-string { color: #86efac; }
+body[data-theme='dark'] .expr-tok-comment { color: #9ca3af; }
+body[data-theme='dark'] .expr-tok-context { color: #67e8f9; }
 
 body[data-theme='dark'] .tab-btn.active {
   border-color: #7d31ea;

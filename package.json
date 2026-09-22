@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "dotenv": "^16.4.7",
+    "expr-eval": "^2.0.2",
     "express": "^4.21.2",
     "mqtt": "^5.14.1",
     "multer": "^2.0.2",

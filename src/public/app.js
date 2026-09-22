@@ -184,6 +184,22 @@ const translations = {
     'mappings.functionalitySignals': 'Señales OPC de la funcionalidad',
     'mappings.noSignalsForType': 'Esta funcionalidad no requiere señales fijas todavía.',
     'mappings.typeAlreadyUsed': 'Ese tipo ya existe en esta estación. Elige otro tipo.',
+    'mappings.signalMode.simple': 'Nodo simple',
+    'mappings.signalMode.expression': 'Fórmula',
+    'mappings.signalMode.activityTimeout': 'Inferir por inactividad',
+    'mappings.signalMode.function': 'Función avanzada',
+    'mappings.aliasName': 'Alias',
+    'mappings.addAlias': 'Agregar alias',
+    'mappings.expressionFormula': 'Fórmula (marcha == 1 and paro == 0)',
+    'mappings.watchNode': 'Nodo a vigilar',
+    'mappings.afterSeconds': 'Segundos sin cambio = inactivo',
+    'mappings.advancedCode': 'Código (function(inputs) { ... return valor; })',
+    'mappings.advancedWarning': '⚠️ Avanzado: este código se ejecuta en un espacio aislado (sin acceso a red, archivos ni al resto del sistema) cada ciclo de lectura. Úsalo solo cuando una fórmula simple no alcance.',
+    'mappings.testNow': 'Probar ahora',
+    'mappings.testNowRunning': 'Probando contra la máquina...',
+    'mappings.testNowDone': 'Prueba completada',
+    'mappings.testNowError': 'Error al probar',
+    'mappings.testNowEmpty': 'Completa los datos del campo antes de probar.',
     'mappings.topicAOptional': 'Canal A (opcional)',
     'mappings.topicBOptional': 'Canal B (opcional)',
     'mappings.sampleScale': 'Escala de muestreo',
@@ -387,6 +403,22 @@ const translations = {
     'mappings.functionalitySignals': 'Function OPC signals',
     'mappings.noSignalsForType': 'This functionality does not require fixed signals yet.',
     'mappings.typeAlreadyUsed': 'That type already exists in this station. Choose another type.',
+    'mappings.signalMode.simple': 'Simple node',
+    'mappings.signalMode.expression': 'Formula',
+    'mappings.signalMode.activityTimeout': 'Infer from inactivity',
+    'mappings.signalMode.function': 'Advanced function',
+    'mappings.aliasName': 'Alias',
+    'mappings.addAlias': 'Add alias',
+    'mappings.expressionFormula': 'Formula (marcha == 1 and paro == 0)',
+    'mappings.watchNode': 'Node to watch',
+    'mappings.afterSeconds': 'Seconds without change = inactive',
+    'mappings.advancedCode': 'Code (function(inputs) { ... return value; })',
+    'mappings.advancedWarning': '⚠️ Advanced: this code runs in an isolated sandbox (no network, file or system access) on every poll cycle. Use it only when a simple formula is not enough.',
+    'mappings.testNow': 'Test now',
+    'mappings.testNowRunning': 'Testing against the machine...',
+    'mappings.testNowDone': 'Test completed',
+    'mappings.testNowError': 'Test error',
+    'mappings.testNowEmpty': 'Fill in the field before testing.',
     'mappings.topicAOptional': 'Channel A (optional)',
     'mappings.topicBOptional': 'Channel B (optional)',
     'mappings.sampleScale': 'Sampling scale',
@@ -1652,12 +1684,22 @@ function getSignalsForFunctionalityType(typeId = 'custom') {
   return SIGNAL_DEFINITIONS_BY_TYPE[typeId] || [];
 }
 
+function isComputedNodeConfig(value) {
+  return value !== null && typeof value === 'object' && typeof value.type === 'string';
+}
+
 function normalizeFunctionalityNodes(typeId = 'custom', rawNodes = {}, legacyNodes = {}) {
   const nodes = {};
   const signalDefs = getSignalsForFunctionalityType(typeId);
 
   for (const signal of signalDefs) {
     const rawValue = rawNodes?.[signal.key] ?? legacyNodes?.[signal.key] ?? '';
+
+    if (isComputedNodeConfig(rawValue)) {
+      nodes[signal.key] = rawValue;
+      continue;
+    }
+
     const value = String(rawValue || '').trim();
     if (value) nodes[signal.key] = value;
   }
@@ -1762,6 +1804,279 @@ function functionalityTypeOptionsHtml(selectedType = 'custom', row = null, curre
     .join('');
 }
 
+function getSignalFieldMode(value) {
+  if (isComputedNodeConfig(value)) {
+    const type = String(value.type || '').trim();
+    if (type === 'expression' || type === 'activityTimeout' || type === 'function') return type;
+  }
+  return 'simple';
+}
+
+function renderSignalAliasRowsHtml(inputsMap = {}) {
+  const entries = Object.entries(inputsMap || {});
+  const rows = entries.length > 0 ? entries : [['', '']];
+  return rows.map(([alias, nodeId]) => `
+    <div class="grid three signal-alias-row" data-alias-row="true">
+      <label><span data-i18n="mappings.aliasName">${escapeHtml(t('mappings.aliasName'))}</span>
+        <input data-alias-name="true" type="text" value="${escapeHtml(String(alias || ''))}" placeholder="alias1" />
+      </label>
+      <label><span data-i18n="mappings.triggerProperty">${escapeHtml(t('mappings.triggerProperty'))}</span>
+        <span class="input-picker"><input data-alias-nodeid="true" type="text" value="${escapeHtml(String(nodeId || ''))}" placeholder="ns=3;s=Device.Tag01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+      </label>
+      <div class="actions align-end">
+        <button class="btn btn-danger" type="button" data-action="remove-signal-alias" data-i18n="mappings.removeTrigger">${escapeHtml(t('mappings.removeTrigger'))}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+const EXPR_KEYWORDS = new Set(['and', 'or', 'not']);
+const EXPR_TOKEN_REGEX = /\s+|==|!=|>=|<=|[()+\-*/^%<>?:,]|[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\.[0-9]+)?/g;
+
+// Genera el HTML resaltado que se muestra DETRAS del textarea de formula
+// (el textarea real queda con texto transparente, solo se ve el caret).
+// - alias definidos (coinciden con el nombre de una fila de la tabla): un color
+// - palabras clave permitidas (and/or/not) y simbolos (== != >= <= () + - etc.): otro color
+// - numeros: otro color
+// - identificadores que no coinciden con ningun alias: subrayado sutil, para
+//   detectar a simple vista un alias mal escrito antes de darle "Probar ahora".
+function renderExpressionHighlightHtml(text, aliasNames = []) {
+  const aliasSet = new Set((aliasNames || []).map((name) => String(name || '').trim()).filter(Boolean));
+  const value = String(text || '');
+
+  let html = '';
+  let lastIndex = 0;
+  const re = new RegExp(EXPR_TOKEN_REGEX.source, 'g');
+  let match = re.exec(value);
+
+  while (match !== null) {
+    if (match.index > lastIndex) {
+      html += escapeHtml(value.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    if (/^\s+$/.test(token)) {
+      html += escapeHtml(token);
+    } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
+      if (EXPR_KEYWORDS.has(token.toLowerCase())) {
+        html += `<span class="expr-tok-keyword">${escapeHtml(token)}</span>`;
+      } else if (aliasSet.has(token)) {
+        html += `<span class="expr-tok-alias">${escapeHtml(token)}</span>`;
+      } else {
+        html += `<span class="expr-tok-unknown">${escapeHtml(token)}</span>`;
+      }
+    } else if (/^[0-9]/.test(token)) {
+      html += `<span class="expr-tok-number">${escapeHtml(token)}</span>`;
+    } else {
+      html += `<span class="expr-tok-op">${escapeHtml(token)}</span>`;
+    }
+
+    lastIndex = re.lastIndex;
+    match = re.exec(value);
+  }
+
+  if (lastIndex < value.length) {
+    html += escapeHtml(value.slice(lastIndex));
+  }
+
+  // Linea final extra: para que la capa de resaltado mida el mismo alto que
+  // el textarea real cuando el texto termina en salto de linea.
+  return `${html}\n`;
+}
+
+function collectSignalAliasNamesFromBody(body) {
+  if (!body) return [];
+  return [...body.querySelectorAll('[data-alias-name="true"]')]
+    .map((input) => String(input.value || '').trim())
+    .filter(Boolean);
+}
+
+function refreshExpressionHighlight(exprBody) {
+  if (!exprBody) return;
+  const textarea = exprBody.querySelector('[data-signal-expression="true"]');
+  const highlightPre = exprBody.querySelector('[data-expr-highlight="true"]');
+  if (!textarea || !highlightPre) return;
+
+  highlightPre.innerHTML = renderExpressionHighlightHtml(textarea.value, collectSignalAliasNamesFromBody(exprBody));
+  highlightPre.scrollTop = textarea.scrollTop;
+  highlightPre.scrollLeft = textarea.scrollLeft;
+}
+
+const CODE_KEYWORDS = new Set([
+  'return', 'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue',
+  'function', 'const', 'let', 'var', 'true', 'false', 'null', 'undefined', 'typeof', 'instanceof',
+  'new', 'this', 'in', 'of', 'try', 'catch', 'finally', 'throw', 'void', 'delete', 'class', 'extends',
+  'super', 'yield', 'async', 'await', 'static', 'get', 'set',
+]);
+
+// Tokenizer de JS simplificado para el modo "Funcion avanzada". A diferencia
+// de la formula (que es una mini-gramatica propia sin strings/comentarios),
+// aqui es JS real ejecutado en el sandbox, asi que hay que reconocer strings
+// y comentarios completos para no pintar por accidente una palabra clave que
+// en realidad esta dentro de un string o un comentario.
+//
+// Grupos de captura, en orden (se usan para saber cual alternativa hizo match):
+//   1: comentario de linea   2: comentario de bloque
+//   3: template string       4: string comillas dobles   5: string comillas simples
+//   6: espacios en blanco
+//   7: operadores/puntuacion
+//   8: identificador/palabra clave
+//   9: numero
+const CODE_TOKEN_REGEX = new RegExp(
+  '(//[^\\n]*)'
+  + '|(/\\*[\\s\\S]*?\\*/)'
+  + '|(`(?:\\\\.|[^`\\\\])*`)'
+  + '|("(?:\\\\.|[^"\\\\])*")'
+  + "|('(?:\\\\.|[^'\\\\])*')"
+  + '|(\\s+)'
+  + '|(=>|===|!==|==|!=|>=|<=|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|[+\\-*/%=<>!&|^~?:;,.()\\[\\]{}])'
+  + '|([A-Za-z_$][A-Za-z0-9_$]*)'
+  + '|([0-9]+(?:\\.[0-9]+)?)',
+  'g'
+);
+
+function renderCodeHighlightHtml(text, aliasNames = []) {
+  const aliasSet = new Set((aliasNames || []).map((name) => String(name || '').trim()).filter(Boolean));
+  const value = String(text || '');
+
+  let html = '';
+  let lastIndex = 0;
+  const re = new RegExp(CODE_TOKEN_REGEX.source, 'g');
+  let match = re.exec(value);
+
+  while (match !== null) {
+    if (match.index > lastIndex) {
+      html += escapeHtml(value.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    if (match[1] || match[2]) {
+      html += `<span class="expr-tok-comment">${escapeHtml(token)}</span>`;
+    } else if (match[3] || match[4] || match[5]) {
+      html += `<span class="expr-tok-string">${escapeHtml(token)}</span>`;
+    } else if (match[6]) {
+      html += escapeHtml(token);
+    } else if (match[7]) {
+      html += `<span class="expr-tok-op">${escapeHtml(token)}</span>`;
+    } else if (match[8]) {
+      if (token === 'inputs') {
+        html += `<span class="expr-tok-context">${escapeHtml(token)}</span>`;
+      } else if (CODE_KEYWORDS.has(token)) {
+        html += `<span class="expr-tok-keyword">${escapeHtml(token)}</span>`;
+      } else if (aliasSet.has(token)) {
+        html += `<span class="expr-tok-alias">${escapeHtml(token)}</span>`;
+      } else {
+        html += escapeHtml(token);
+      }
+    } else if (match[9]) {
+      html += `<span class="expr-tok-number">${escapeHtml(token)}</span>`;
+    }
+
+    lastIndex = re.lastIndex;
+    match = re.exec(value);
+  }
+
+  if (lastIndex < value.length) {
+    html += escapeHtml(value.slice(lastIndex));
+  }
+
+  return `${html}
+`;
+}
+
+function refreshHighlightForSignalBody(body) {
+  const bodyType = body?.getAttribute('data-signal-mode-body');
+  if (bodyType === 'expression') refreshExpressionHighlight(body);
+  else if (bodyType === 'function') refreshCodeHighlight(body);
+}
+
+function refreshCodeHighlight(codeBody) {
+  if (!codeBody) return;
+  const textarea = codeBody.querySelector('[data-signal-code="true"]');
+  const highlightPre = codeBody.querySelector('[data-code-highlight="true"]');
+  if (!textarea || !highlightPre) return;
+
+  highlightPre.innerHTML = renderCodeHighlightHtml(textarea.value, collectSignalAliasNamesFromBody(codeBody));
+  highlightPre.scrollTop = textarea.scrollTop;
+  highlightPre.scrollLeft = textarea.scrollLeft;
+}
+
+function renderSignalFieldHtml(signal, rawValue, counterModes = {}) {
+  const mode = getSignalFieldMode(rawValue);
+  const simpleValue = mode === 'simple' ? String(rawValue || '').trim() : '';
+  const expressionConfig = mode === 'expression' ? rawValue : {};
+  const activityConfig = mode === 'activityTimeout' ? rawValue : {};
+  const functionConfig = mode === 'function' ? rawValue : {};
+
+  const isDelta = signal.hasCounterMode && counterModes[signal.key] === 'delta';
+  const counterModeHtml = signal.hasCounterMode
+    ? `<label class="checkbox"><input data-function-node-mode="${escapeHtml(signal.key)}" type="checkbox" ${isDelta ? 'checked' : ''} /><span data-i18n="mappings.counterModeDelta">${escapeHtml(t('mappings.counterModeDelta'))}</span></label>`
+    : '';
+
+  const modeOptionsHtml = ['simple', 'expression', 'activityTimeout', 'function'].map((optionId) => {
+    const labelKey = `mappings.signalMode.${optionId}`;
+    return `<option value="${optionId}" ${mode === optionId ? 'selected' : ''} data-i18n="${labelKey}">${escapeHtml(t(labelKey))}</option>`;
+  }).join('');
+
+  const testNowHtml = `
+    <div class="actions">
+      <button class="btn btn-secondary" type="button" data-action="test-signal-field" data-i18n="mappings.testNow">${escapeHtml(t('mappings.testNow'))}</button>
+    </div>
+    <pre class="status-box browser-value signal-test-output" data-signal-test-output="true" hidden></pre>
+  `;
+
+  return `
+    <div class="signal-field" data-functionality-signal="true" data-signal-key="${escapeHtml(signal.key)}">
+      <div class="signal-field-head">
+        <span data-i18n="${escapeHtml(signal.labelKey)}">${escapeHtml(t(signal.labelKey))}</span>
+        <select data-signal-mode-select="true">${modeOptionsHtml}</select>
+      </div>
+
+      <div data-signal-mode-body="simple" ${mode === 'simple' ? '' : 'hidden'}>
+        <span class="input-picker"><input data-function-node="${escapeHtml(signal.key)}" type="text" value="${escapeHtml(simpleValue)}" placeholder="${escapeHtml(signal.placeholder || 'ns=3;s=Device.Tag01')}" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+        ${counterModeHtml}
+      </div>
+
+      <div data-signal-mode-body="expression" ${mode === 'expression' ? '' : 'hidden'}>
+        <div data-alias-list="true">${renderSignalAliasRowsHtml(expressionConfig.inputs)}</div>
+        <div class="actions"><button class="btn btn-secondary" type="button" data-action="add-signal-alias" data-i18n="mappings.addAlias">${escapeHtml(t('mappings.addAlias'))}</button></div>
+        <label><span data-i18n="mappings.expressionFormula">${escapeHtml(t('mappings.expressionFormula'))}</span>
+          <div class="expr-editor" data-expr-editor="true">
+            <pre class="expr-editor-highlight" data-expr-highlight="true" aria-hidden="true">${renderExpressionHighlightHtml(String(expressionConfig.expression || ''), Object.keys(expressionConfig.inputs || {}))}</pre>
+            <textarea data-signal-expression="true" rows="2" spellcheck="false" placeholder="marcha == 1 and paro == 0">${escapeHtml(String(expressionConfig.expression || ''))}</textarea>
+          </div>
+        </label>
+        ${counterModeHtml}
+        ${testNowHtml}
+      </div>
+
+      <div data-signal-mode-body="activityTimeout" ${mode === 'activityTimeout' ? '' : 'hidden'}>
+        <label><span data-i18n="mappings.watchNode">${escapeHtml(t('mappings.watchNode'))}</span>
+          <span class="input-picker"><input data-signal-watch="true" type="text" value="${escapeHtml(String(activityConfig.watch || ''))}" placeholder="ns=3;s=Device.Counter01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+        </label>
+        <label><span data-i18n="mappings.afterSeconds">${escapeHtml(t('mappings.afterSeconds'))}</span>
+          <input data-signal-after-seconds="true" type="number" min="0" step="1" value="${activityConfig.afterSeconds ? escapeHtml(String(activityConfig.afterSeconds)) : ''}" placeholder="30" />
+        </label>
+        ${testNowHtml}
+      </div>
+
+      <div data-signal-mode-body="function" ${mode === 'function' ? '' : 'hidden'}>
+        <p class="muted" data-i18n="mappings.advancedWarning">${escapeHtml(t('mappings.advancedWarning'))}</p>
+        <div data-alias-list="true">${renderSignalAliasRowsHtml(functionConfig.inputs)}</div>
+        <div class="actions"><button class="btn btn-secondary" type="button" data-action="add-signal-alias" data-i18n="mappings.addAlias">${escapeHtml(t('mappings.addAlias'))}</button></div>
+        <label><span data-i18n="mappings.advancedCode">${escapeHtml(t('mappings.advancedCode'))}</span>
+          <div class="expr-editor" data-expr-editor="true">
+            <pre class="expr-editor-highlight" data-code-highlight="true" aria-hidden="true">${renderCodeHighlightHtml(String(functionConfig.code || ''), Object.keys(functionConfig.inputs || {}))}</pre>
+            <textarea data-signal-code="true" rows="4" spellcheck="false" placeholder="return inputs.arr.filter(x => x === 3).length;">${escapeHtml(String(functionConfig.code || ''))}</textarea>
+          </div>
+        </label>
+        ${testNowHtml}
+        ${counterModeHtml}
+      </div>
+    </div>
+  `;
+}
+
 function renderFunctionalitySignals(featureNode, feature = {}) {
   const signalsList = featureNode.querySelector('[data-functionality-field="signals-list"]');
   if (!signalsList) return;
@@ -1776,19 +2091,26 @@ function renderFunctionalitySignals(featureNode, feature = {}) {
       ? customEntries
       : [['', '']];
 
-    const rowsHtml = rows.map(([name, nodeId]) => `
+    const rowsHtml = rows.map(([name, nodeId]) => {
+      // El tipo "custom" no soporta configuraciones calculadas (expression/activityTimeout/
+      // function): si un campo traía una de esas configuraciones (porque la funcionalidad
+      // cambio de tipo, ej. pieceCount -> custom), se descarta en vez de convertirla en el
+      // string basura "[object Object]".
+      const safeNodeId = isComputedNodeConfig(nodeId) ? '' : String(nodeId || '');
+      return `
       <div class="grid four custom-signal-row" data-custom-signal-row="true">
         <label><span data-i18n="mappings.functionalityName">Nombre funcionalidad</span>
           <input data-custom-signal-name="true" type="text" value="${escapeHtml(String(name || ''))}" placeholder="field_name" />
         </label>
         <label><span data-i18n="mappings.triggerProperty">Propiedad para cambio de valor</span>
-          <span class="input-picker"><input data-custom-signal-nodeid="true" type="text" value="${escapeHtml(String(nodeId || ''))}" placeholder="ns=3;s=Device.Custom01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+          <span class="input-picker"><input data-custom-signal-nodeid="true" type="text" value="${escapeHtml(safeNodeId)}" placeholder="ns=3;s=Device.Custom01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
         </label>
         <div class="actions align-end">
           <button class="btn btn-danger" type="button" data-action="remove-custom-signal" data-i18n="mappings.removeTrigger">Eliminar evento</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     signalsList.innerHTML = `
       <div data-functionality-field="custom-signals-list">${rowsHtml}</div>
@@ -1809,22 +2131,11 @@ function renderFunctionalitySignals(featureNode, feature = {}) {
 
   const currentCounterModes = feature.counterModes || {};
 
-  const rows = signalDefs.map((signal) => {
-    const value = String(currentNodes[signal.key] || '').trim();
-    const isDelta = signal.hasCounterMode && currentCounterModes[signal.key] === 'delta';
-    const counterModeHtml = signal.hasCounterMode
-      ? `<label class="checkbox"><input data-function-node-mode="${escapeHtml(signal.key)}" type="checkbox" ${isDelta ? 'checked' : ''} /><span data-i18n="mappings.counterModeDelta">${escapeHtml(t('mappings.counterModeDelta'))}</span></label>`
-      : '';
+  const rows = signalDefs
+    .map((signal) => renderSignalFieldHtml(signal, currentNodes[signal.key], currentCounterModes))
+    .join('');
 
-    return `
-      <label><span data-i18n="${escapeHtml(signal.labelKey)}">${escapeHtml(t(signal.labelKey))}</span>
-        <span class="input-picker"><input data-function-node="${escapeHtml(signal.key)}" type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(signal.placeholder || 'ns=3;s=Device.Tag01')}" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
-        ${counterModeHtml}
-      </label>
-    `;
-  }).join('');
-
-  signalsList.innerHTML = `<div class="grid two">${rows}</div>`;
+  signalsList.innerHTML = `<div class="signal-fields-list">${rows}</div>`;
   applyTranslationsInRoot(signalsList);
 }
 
@@ -2024,6 +2335,28 @@ function addCustomSignalRow(featureNode) {
   container.appendChild(wrapper);
 }
 
+function addSignalAliasRow(container) {
+  if (!container) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'grid three signal-alias-row';
+  wrapper.setAttribute('data-alias-row', 'true');
+  wrapper.innerHTML = `
+    <label><span data-i18n="mappings.aliasName">${escapeHtml(t('mappings.aliasName'))}</span>
+      <input data-alias-name="true" type="text" placeholder="alias1" />
+    </label>
+    <label><span data-i18n="mappings.triggerProperty">${escapeHtml(t('mappings.triggerProperty'))}</span>
+      <span class="input-picker"><input data-alias-nodeid="true" type="text" placeholder="ns=3;s=Device.Tag01" /><button class="btn btn-secondary btn-pick-node" type="button">🔎</button></span>
+    </label>
+    <div class="actions align-end">
+      <button class="btn btn-danger" type="button" data-action="remove-signal-alias" data-i18n="mappings.removeTrigger">${escapeHtml(t('mappings.removeTrigger'))}</button>
+    </div>
+  `;
+
+  applyTranslationsInRoot(wrapper);
+  container.appendChild(wrapper);
+}
+
 function readTriggerEventsFromFunctionality(featureNode) {
   const triggerRows = [...featureNode.querySelectorAll('.trigger-event-item')];
   const events = triggerRows.map((triggerRow) => normalizeTriggerEvent({
@@ -2039,24 +2372,105 @@ function readTriggerEventsFromFunctionality(featureNode) {
   return events;
 }
 
+function readSignalAliasesFromContainer(container) {
+  const inputs = {};
+  if (!container) return inputs;
+
+  for (const row of container.querySelectorAll('[data-alias-row="true"]')) {
+    const alias = String(row.querySelector('[data-alias-name="true"]')?.value || '').trim();
+    const nodeId = String(row.querySelector('[data-alias-nodeid="true"]')?.value || '').trim();
+    if (alias && nodeId) inputs[alias] = nodeId;
+  }
+
+  return inputs;
+}
+
+function readSignalFieldValue(fieldNode) {
+  const mode = String(fieldNode.querySelector('[data-signal-mode-select="true"]')?.value || 'simple');
+
+  if (mode === 'expression') {
+    const body = fieldNode.querySelector('[data-signal-mode-body="expression"]');
+    const inputs = readSignalAliasesFromContainer(body);
+    const expression = String(body?.querySelector('[data-signal-expression="true"]')?.value || '').trim();
+    return expression ? { type: 'expression', inputs, expression } : '';
+  }
+
+  if (mode === 'activityTimeout') {
+    const body = fieldNode.querySelector('[data-signal-mode-body="activityTimeout"]');
+    const watch = String(body?.querySelector('[data-signal-watch="true"]')?.value || '').trim();
+    const afterSeconds = Number(body?.querySelector('[data-signal-after-seconds="true"]')?.value || 0) || 0;
+    return watch ? { type: 'activityTimeout', watch, afterSeconds } : '';
+  }
+
+  if (mode === 'function') {
+    const body = fieldNode.querySelector('[data-signal-mode-body="function"]');
+    const inputs = readSignalAliasesFromContainer(body);
+    const code = String(body?.querySelector('[data-signal-code="true"]')?.value || '');
+    return code.trim() ? { type: 'function', inputs, code } : '';
+  }
+
+  return String(fieldNode.querySelector('[data-function-node]')?.value || '').trim();
+}
+
+function collectNodesFromFeatureNode(featureNode) {
+  const nodes = {};
+
+  for (const fieldNode of featureNode.querySelectorAll('[data-functionality-signal="true"]')) {
+    const key = String(fieldNode.getAttribute('data-signal-key') || '').trim();
+    if (!key) continue;
+    const value = readSignalFieldValue(fieldNode);
+    const hasValue = typeof value === 'string' ? Boolean(value) : Boolean(value && typeof value === 'object');
+    if (hasValue) nodes[key] = value;
+  }
+
+  for (const customRow of featureNode.querySelectorAll('[data-custom-signal-row="true"]')) {
+    const key = String(customRow.querySelector('[data-custom-signal-name="true"]')?.value || '').trim();
+    const value = String(customRow.querySelector('[data-custom-signal-nodeid="true"]')?.value || '').trim();
+    if (key && value) nodes[key] = value;
+  }
+
+  return nodes;
+}
+
+async function testSignalFieldNow(fieldNode, outputBox, row) {
+  const value = readSignalFieldValue(fieldNode);
+  const isEmpty = typeof value === 'string' ? !value.trim() : !(value && typeof value === 'object');
+  if (isEmpty) {
+    throw new Error(t('mappings.testNowEmpty'));
+  }
+
+  const serverId = String(row?.querySelector('[data-field="opcServerId"]')?.value || '').trim();
+
+  if (outputBox) {
+    outputBox.hidden = false;
+    outputBox.textContent = t('mappings.testNowRunning');
+  }
+
+  try {
+    const data = await apiFetch('/api/opc/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ serverId, value }),
+    });
+
+    if (outputBox) {
+      outputBox.textContent = JSON.stringify({ valores: data.valuesByNodeId, resultado: data.result }, null, 2);
+    }
+    showMessage(t('mappings.testNowDone'));
+  } catch (error) {
+    if (outputBox) {
+      outputBox.textContent = `${t('mappings.testNowError')}: ${error.message}`;
+    }
+    throw error;
+  }
+}
+
 function collectFunctionalitiesFromRow(row) {
   const featureNodes = [...row.querySelectorAll('.mapping-functionality-card')];
   return featureNodes.map((featureNode, index) => {
     const type = getFunctionalityTypeById(featureNode.querySelector('[data-functionality-field="type"]')?.value || 'custom');
     const fallbackName = t(type.nameKey);
 
-    const nodes = {};
-    for (const input of featureNode.querySelectorAll('[data-function-node]')) {
-      const key = String(input.getAttribute('data-function-node') || '').trim();
-      const value = String(input.value || '').trim();
-      if (key && value) nodes[key] = value;
-    }
-
-    for (const customRow of featureNode.querySelectorAll('[data-custom-signal-row="true"]')) {
-      const key = String(customRow.querySelector('[data-custom-signal-name="true"]')?.value || '').trim();
-      const value = String(customRow.querySelector('[data-custom-signal-nodeid="true"]')?.value || '').trim();
-      if (key && value) nodes[key] = value;
-    }
+    const nodes = collectNodesFromFeatureNode(featureNode);
 
     const counterModes = {};
     for (const checkbox of featureNode.querySelectorAll('[data-function-node-mode]')) {
@@ -2388,6 +2802,35 @@ function createMappingNode(mapping = null) {
       return;
     }
 
+    if (actionButton.dataset.action === 'add-signal-alias') {
+      const body = actionButton.closest('[data-signal-mode-body]');
+      const aliasList = body?.querySelector('[data-alias-list="true"]');
+      if (aliasList) addSignalAliasRow(aliasList);
+      refreshHighlightForSignalBody(body);
+      return;
+    }
+
+    if (actionButton.dataset.action === 'remove-signal-alias') {
+      const body = actionButton.closest('[data-signal-mode-body]');
+      const aliasList = actionButton.closest('[data-alias-list="true"]');
+      const aliasRow = actionButton.closest('[data-alias-row="true"]');
+      aliasRow?.remove();
+      if (aliasList && aliasList.querySelectorAll('[data-alias-row="true"]').length === 0) {
+        addSignalAliasRow(aliasList);
+      }
+      refreshHighlightForSignalBody(body);
+      return;
+    }
+
+    if (actionButton.dataset.action === 'test-signal-field') {
+      const fieldNode = actionButton.closest('[data-functionality-signal="true"]');
+      const outputBox = actionButton.closest('[data-signal-mode-body]')?.querySelector('[data-signal-test-output="true"]');
+      if (fieldNode) {
+        testSignalFieldNow(fieldNode, outputBox, row).catch((error) => showMessage(error.message, true));
+      }
+      return;
+    }
+
     if (actionButton.dataset.action === 'remove-trigger-event') {
       const triggerNode = actionButton.closest('.trigger-event-item');
       const triggersList = actionButton.closest('[data-functionality-field="triggers-list"]');
@@ -2404,6 +2847,17 @@ function createMappingNode(mapping = null) {
   row.addEventListener('change', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
+
+    if (target.matches('[data-signal-mode-select="true"]')) {
+      const fieldNode = target.closest('[data-functionality-signal="true"]');
+      if (fieldNode) {
+        const selectedMode = String(target.value || 'simple');
+        fieldNode.querySelectorAll('[data-signal-mode-body]').forEach((body) => {
+          body.hidden = body.getAttribute('data-signal-mode-body') !== selectedMode;
+        });
+      }
+      return;
+    }
 
     if (target.matches('[data-trigger-field="mode"]')) {
       const triggerNode = target.closest('.trigger-event-item');
@@ -2434,18 +2888,7 @@ function createMappingNode(mapping = null) {
         topicInput.placeholder = getFunctionalityTopicPlaceholder(type.id);
       }
 
-      const existingNodes = {};
-      for (const input of featureNode.querySelectorAll('[data-function-node]')) {
-        const key = String(input.getAttribute('data-function-node') || '').trim();
-        const value = String(input.value || '').trim();
-        if (key && value) existingNodes[key] = value;
-      }
-
-      for (const customRow of featureNode.querySelectorAll('[data-custom-signal-row="true"]')) {
-        const name = String(customRow.querySelector('[data-custom-signal-name="true"]')?.value || '').trim();
-        const nodeId = String(customRow.querySelector('[data-custom-signal-nodeid="true"]')?.value || '').trim();
-        if (name && nodeId) existingNodes[name] = nodeId;
-      }
+      const existingNodes = collectNodesFromFeatureNode(featureNode);
 
       const existingCounterModes = {};
       for (const checkbox of featureNode.querySelectorAll('[data-function-node-mode]')) {
@@ -2473,6 +2916,28 @@ function createMappingNode(mapping = null) {
   row.addEventListener('input', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
+
+    if (target.matches('[data-signal-expression="true"]')) {
+      refreshExpressionHighlight(target.closest('[data-signal-mode-body="expression"]'));
+      return;
+    }
+
+    if (target.matches('[data-signal-code="true"]')) {
+      refreshCodeHighlight(target.closest('[data-signal-mode-body="function"]'));
+      return;
+    }
+
+    if (target.matches('[data-alias-name="true"]')) {
+      const exprBody = target.closest('[data-signal-mode-body="expression"]');
+      if (exprBody) {
+        refreshExpressionHighlight(exprBody);
+        return;
+      }
+      const codeBody = target.closest('[data-signal-mode-body="function"]');
+      if (codeBody) refreshCodeHighlight(codeBody);
+      return;
+    }
+
     if (target.matches('[data-trigger-field="intervalSeconds"]')) {
       updateResolutionFromFunctionalities(row);
     }
