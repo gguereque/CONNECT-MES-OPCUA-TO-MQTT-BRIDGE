@@ -9,3 +9,14 @@ data/certs/
 
 # Documentacion/PDFs del cliente (ARBURG, etc.) - no debe ir al repo
 informacion cliente/
+
+# Config real por instalacion (mapping de estaciones y config del bridge):
+# cada instalacion/cliente tiene la suya, nunca debe versionarse ni generar
+# conflictos de merge al hacer pull. config/mapping.example.json SI se queda
+# rastreado, es la plantilla de referencia.
+config/mapping.json
+config/bridge-config.json
+
+# Base de datos de persistencia de Mosquitto (estado del broker en runtime,
+# no codigo ni configuracion versionable).
+mosquitto/data/mosquitto.db

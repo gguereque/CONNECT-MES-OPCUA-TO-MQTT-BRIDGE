@@ -1,0 +1,105 @@
+{
+  "stations": [
+    {
+      "stationId": 209,
+      "opcServerId": "opc-1",
+      "context": {
+        "facilities": "37",
+        "Area": "39",
+        "Line": "104"
+      },
+      "defaults": {
+        "Resolution": 60
+      },
+      "functionalities": [
+        {
+          "id": "pieceCount",
+          "name": "Piece Count",
+          "type": "pieceCount",
+          "enabled": true,
+          "onlyOnChange": false,
+          "topic": "",
+          "triggers": [
+            {
+              "mode": "intervalSeconds",
+              "triggerNodeId": "",
+              "intervalSeconds": 60
+            }
+          ],
+          "nodes": {
+            "marcha": {
+              "type": "expression",
+              "inputs": {
+                "f990031": "ns=2;i=380212",
+                "f990032": "ns=2;i=380222",
+                "f990041": "ns=2;i=380282"
+              },
+              "expression": "(f990031 == 0 or f990031 == 11 or f990031 == 12) and f990032 == 3 and f990041 == 3"
+            },
+            "parts_count": "ns=2;i=117562",
+            "Resolution": "1"
+          },
+          "counterModes": {
+            "parts_count": "delta",
+            "parts_rejected": "raw"
+          }
+        },
+        {
+          "id": "machineStates",
+          "name": "Machine States",
+          "type": "machineStates",
+          "enabled": true,
+          "onlyOnChange": true,
+          "topic": "",
+          "triggers": [
+            {
+              "mode": "onValueChanged",
+              "triggerNodeId": "ns=2;i=380212",
+              "intervalSeconds": 0
+            }
+          ],
+          "nodes": {
+            "estop_status": {
+              "type": "expression",
+              "inputs": {
+                "f990031": "ns=2;i=380212",
+                "f990032": "ns=2;i=380222",
+                "f990041": "ns=2;i=380282"
+              },
+              "expression": "(f990031 == 0 or f990031 == 11 or f990031 == 12) and f990032 == 3 and f990041 == 3"
+            }
+          },
+          "counterModes": {}
+        }
+      ],
+      "publish": {
+        "oee": true,
+        "estop": true,
+        "oeeOnlyOnChange": false,
+        "estopOnlyOnChange": true
+      },
+      "topics": {
+        "oee": "",
+        "estop": ""
+      },
+      "triggers": {
+        "oee": {
+          "mode": "intervalSeconds",
+          "triggerNodeId": "",
+          "intervalSeconds": 60
+        },
+        "estop": {
+          "mode": "onValueChanged",
+          "triggerNodeId": "ns=2;i=380212",
+          "intervalSeconds": 0
+        }
+      },
+      "nodes": {
+        "marcha": "[object Object]",
+        "parts_count": "ns=2;i=117562",
+        "Resolution": "1",
+        "estop_status": "[object Object]"
+      }
+    }
+  ]
+}

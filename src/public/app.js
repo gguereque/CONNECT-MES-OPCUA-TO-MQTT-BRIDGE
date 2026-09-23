@@ -2680,6 +2680,12 @@ function buildLegacyFieldsFromFunctionalities(functionalities) {
   for (const feature of functionalities || []) {
     for (const [key, value] of Object.entries(feature.nodes || {})) {
       if (!value) continue;
+      // Una config calculada (Formula/Funcion avanzada) no tiene una forma util de
+      // "aplanarse" a un NodeId de string plano -- String(objeto) da literalmente
+      // "[object Object]", que quedaria guardado en config/mapping.json como si
+      // fuera un NodeId real. Este espejo legacy (mapping.nodes) solo tiene sentido
+      // para NodeIds simples, asi que las configs calculadas se dejan fuera.
+      if (isComputedNodeConfig(value)) continue;
       nodes[key] = String(value);
     }
   }

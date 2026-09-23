@@ -4,6 +4,7 @@ const signalResolver = require('./signal-resolver');
 const {
   AttributeIds,
   NodeClass,
+  coerceNodeId,
 } = require('node-opcua');
 
 function toSqlDateTime(dateInput = new Date()) {
@@ -414,10 +415,16 @@ class BridgeRuntime {
     const nodeIds = new Set();
     signalResolver.collectNodeIdsForPropertyValue(value, nodeIds);
 
-    const nodesToRead = [...nodeIds].map((nodeId) => ({
-      nodeId: sanitizeOpcNodeId(nodeId),
-      attributeId: AttributeIds.Value,
-    }));
+    const nodesToRead = [];
+    for (const rawNodeId of nodeIds) {
+      const nodeId = sanitizeOpcNodeId(rawNodeId);
+      try {
+        coerceNodeId(nodeId);
+        nodesToRead.push({ nodeId, attributeId: AttributeIds.Value });
+      } catch (err) {
+        this.warn(`Invalid NodeId ignored in evaluatePropertyValue: "${nodeId}" (${err.message})`);
+      }
+    }
 
     const valuesByNodeId = {};
     let resolvedServerId = serverId || this.getDefaultOpcServerId();
@@ -509,10 +516,24 @@ class BridgeRuntime {
 
     const valuesByNodeId = {};
     const serverId = mapping.opcServerId || this.getDefaultOpcServerId();
-    const nodesToRead = [...nodeIds].map((nodeId) => ({
-      nodeId,
-      attributeId: AttributeIds.Value,
-    }));
+
+    // Un solo NodeId con formato invalido (ej. un valor literal como "1" metido
+    // por error donde se esperaba un NodeId real, p.ej. en nodes.Resolution)
+    // hace que node-opcua truene al construir el request de lectura. Como esta
+    // estacion lee TODOS sus nodos juntos en una sola llamada session.read(),
+    // esa unica falla tumbaba la lectura completa y dejaba marcha/parts_count/
+    // etc. en undefined para TODA la estacion, aunque el resto de sus NodeIds
+    // fueran perfectamente validos. Se valida cada NodeId por separado antes
+    // de armar el batch, para que uno invalido solo afecte a esa propiedad.
+    const nodesToRead = [];
+    for (const nodeId of nodeIds) {
+      try {
+        coerceNodeId(nodeId);
+        nodesToRead.push({ nodeId, attributeId: AttributeIds.Value });
+      } catch (err) {
+        this.warn(`Invalid NodeId ignored for station ${mapping.stationId}: "${nodeId}" (${err.message})`);
+      }
+    }
 
     if (nodesToRead.length === 0) {
       return valuesByNodeId;
@@ -527,9 +548,9 @@ class BridgeRuntime {
           : undefined;
       });
     } catch (err) {
-      for (const nodeId of nodeIds) {
-        valuesByNodeId[nodeId] = undefined;
-        this.warn(`Node read failed station ${mapping.stationId}, server ${serverId}, node ${nodeId}: ${err.message}`);
+      for (const item of nodesToRead) {
+        valuesByNodeId[item.nodeId] = undefined;
+        this.warn(`Node read failed station ${mapping.stationId}, server ${serverId}, node ${item.nodeId}: ${err.message}`);
       }
     }
 
